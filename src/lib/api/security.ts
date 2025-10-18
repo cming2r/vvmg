@@ -14,8 +14,8 @@ const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 export function validateApiKey(apiKey: string | null): boolean {
   if (!apiKey) return false;
 
-  // 從環境變數獲取允許的 API Keys
-  const validKeys = process.env.OCR_API_KEYS?.split(',') || [];
+  // 從環境變數獲取允許的 API Keys（支援逗號分隔多個 key）
+  const validKeys = process.env.OCR_API_KEY?.split(',') || [];
 
   return validKeys.includes(apiKey.trim());
 }

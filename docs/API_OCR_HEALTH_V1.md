@@ -4,10 +4,9 @@
 
 健康設備 OCR API 能夠識別血壓計和身高體重計的螢幕數據，自動提取測量數值。
 
-- **端點**: `POST /api/v1/ocr-health`
+- **端點**: `https://vvmg.cc/api/v1/ocr-health`
 - **版本**: v1
 - **認證**: API Key (必需)
-- **速率限制**: 10 次/分鐘 (可配置)
 
 ---
 
@@ -27,9 +26,9 @@ x-api-key: your_api_key_here
 
 ## 📤 請求格式
 
-### HTTP Method
+### 端點 URL
 ```
-POST /api/v1/ocr-health
+POST https://vvmg.cc/api/v1/ocr-health
 ```
 
 ### Headers
@@ -244,7 +243,7 @@ X-RateLimit-Reset: 1705305600000
 ```javascript
 async function recognizeHealthDevice(imageBase64) {
   try {
-    const response = await fetch('https://your-domain.com/api/v1/ocr-health', {
+    const response = await fetch('https://vvmg.cc/api/v1/ocr-health', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -292,83 +291,11 @@ const imageBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRg...';
 recognizeHealthDevice(imageBase64);
 ```
 
-### Python
-
-```python
-import requests
-import base64
-import json
-
-def recognize_health_device(image_path, api_key):
-    """
-    識別健康設備數據
-
-    Args:
-        image_path: 圖片路徑
-        api_key: API Key
-
-    Returns:
-        dict: 識別結果
-    """
-    # 讀取並編碼圖片
-    with open(image_path, 'rb') as f:
-        image_data = base64.b64encode(f.read()).decode('utf-8')
-        image_base64 = f'data:image/jpeg;base64,{image_data}'
-
-    # 發送請求
-    response = requests.post(
-        'https://your-domain.com/api/v1/ocr-health',
-        headers={
-            'Content-Type': 'application/json',
-            'x-api-key': api_key
-        },
-        json={'image': image_base64}
-    )
-
-    # 檢查速率限制
-    remaining = response.headers.get('X-RateLimit-Remaining')
-    print(f'剩餘請求次數: {remaining}')
-
-    # 處理響應
-    if response.status_code == 429:
-        reset_time = response.headers.get('X-RateLimit-Reset')
-        raise Exception(f'超過速率限制，請等待至 {reset_time}')
-
-    result = response.json()
-
-    if not result['success']:
-        raise Exception(result.get('message', '識別失敗'))
-
-    # 處理結果
-    if result['deviceType'] == 'blood_pressure':
-        bp = result['bloodPressure']
-        print(f"收縮壓: {bp['systolic']} mmHg")
-        print(f"舒張壓: {bp['diastolic']} mmHg")
-        print(f"脈搏: {bp['pulse']} bpm")
-
-    elif result['deviceType'] == 'body_measurement':
-        bm = result['bodyMeasurement']
-        print(f"身高: {bm['height']} {bm['heightUnit']}")
-        print(f"體重: {bm['weight']} {bm['weightUnit']}")
-
-    return result
-
-# 使用範例
-try:
-    result = recognize_health_device(
-        image_path='blood_pressure.jpg',
-        api_key='your_api_key_here'
-    )
-    print(json.dumps(result, indent=2, ensure_ascii=False))
-except Exception as e:
-    print(f'錯誤: {str(e)}')
-```
-
 ### cURL
 
 ```bash
 # 基本請求
-curl -X POST https://your-domain.com/api/v1/ocr-health \
+curl -X POST https://vvmg.cc/api/v1/ocr-health \
   -H "Content-Type: application/json" \
   -H "x-api-key: your_api_key_here" \
   -d '{
@@ -377,7 +304,7 @@ curl -X POST https://your-domain.com/api/v1/ocr-health \
 
 # 使用文件（需先轉換為 base64）
 IMAGE_BASE64=$(base64 -i blood_pressure.jpg)
-curl -X POST https://your-domain.com/api/v1/ocr-health \
+curl -X POST https://vvmg.cc/api/v1/ocr-health \
   -H "Content-Type: application/json" \
   -H "x-api-key: your_api_key_here" \
   -d "{
@@ -385,7 +312,7 @@ curl -X POST https://your-domain.com/api/v1/ocr-health \
   }" | jq
 
 # 查看速率限制資訊
-curl -i -X POST https://your-domain.com/api/v1/ocr-health \
+curl -i -X POST https://vvmg.cc/api/v1/ocr-health \
   -H "Content-Type: application/json" \
   -H "x-api-key: your_api_key_here" \
   -d '{"image": "..."}' | grep "X-RateLimit"
@@ -501,7 +428,6 @@ function validateBloodPressure(bp) {
 - ✅ 身高體重計數據識別
 - ✅ 多單位支援 (cm/ft/in, kg/lbs)
 - ✅ API Key 認證
-- ✅ 速率限制 (10次/分鐘)
 - ✅ CORS 支援
 
 **限制**:
