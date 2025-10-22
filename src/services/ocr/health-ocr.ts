@@ -42,9 +42,9 @@ export interface HealthOCRResult {
  */
 export async function processHealthOCR(imageBase64: string): Promise<HealthOCRResult> {
   try {
-    // 使用 GPT-5 進行健康設備 OCR 識別
+    // 使用 Gemini 2.5 Flash Image 進行健康設備 OCR 識別
     const { text } = await generateText({
-      model: 'openai/gpt-5',
+      model: 'google/gemini-2.5-flash-image',
       messages: [
         {
           role: 'user',
@@ -62,6 +62,9 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
 1. 首先判斷設備類型
 2. 仔細識別螢幕上顯示的數字
 3. 提取測量日期和時間（如果有）
+   - 日期格式：YYYY-MM-DD
+   - 如果圖片只顯示月日（如 01/15），請使用當前年份 ${new Date().getFullYear()}
+   - 如果完全沒有日期，則不返回 date 欄位
 4. **重要：識別並返回單位**
    - 血壓：通常是 mmHg
    - 脈搏：通常是 bpm (次/分鐘)
@@ -160,6 +163,41 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
 }
 
 /**
+ * 處理日期格式，如果沒有年份則補上當前年份
+ */
+function normalizeDate(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+
+  // 如果已經是完整的 YYYY-MM-DD 格式
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+
+  // 如果是 MM-DD 或 MM/DD 格式，補上當前年份
+  const currentYear = new Date().getFullYear();
+
+  // 處理 MM-DD 格式
+  if (/^\d{2}-\d{2}$/.test(dateStr)) {
+    return `${currentYear}-${dateStr}`;
+  }
+
+  // 處理 MM/DD 格式
+  if (/^\d{2}\/\d{2}$/.test(dateStr)) {
+    return `${currentYear}-${dateStr.replace('/', '-')}`;
+  }
+
+  // 處理 M-D 或 M/D 格式（單數字月日）
+  const monthDayMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  if (monthDayMatch) {
+    const month = monthDayMatch[1].padStart(2, '0');
+    const day = monthDayMatch[2].padStart(2, '0');
+    return `${currentYear}-${month}-${day}`;
+  }
+
+  return dateStr;
+}
+
+/**
  * 解析 AI 回應並驗證數據
  */
 function parseHealthOCRResponse(text: string): HealthOCRResult {
@@ -179,7 +217,7 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
       const parsed = JSON.parse(jsonStr);
 
       deviceType = parsed.deviceType || 'unknown';
-      date = parsed.date || null;
+      date = normalizeDate(parsed.date || null);
       time = parsed.time || null;
 
       // 根據設備類型提取數據
@@ -207,7 +245,7 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
       // 如果沒有 JSON 格式，嘗試直接解析
       const parsed = JSON.parse(text);
       deviceType = parsed.deviceType || 'unknown';
-      date = parsed.date || null;
+      date = normalizeDate(parsed.date || null);
       time = parsed.time || null;
 
       if (deviceType === 'blood_pressure' && parsed.bloodPressure) {

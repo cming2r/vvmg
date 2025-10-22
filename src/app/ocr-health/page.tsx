@@ -13,6 +13,10 @@ const HealthOCRPage: FC = () => {
     setOCRResult(result);
   };
 
+  const handleReset = () => {
+    setOCRResult(null);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
@@ -25,12 +29,12 @@ const HealthOCRPage: FC = () => {
             </h1>
           </div>
           <p className="text-lg text-gray-600">
-            上傳血壓計或身高體重計照片，自動識別健康數據
+            上傳血壓計、身高體重計或血糖計照片，自動識別健康數據
           </p>
         </div>
 
         {/* 支援設備說明 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {/* 血壓計 */}
           <div className="bg-white rounded-lg p-6 shadow-sm border-l-4 border-red-500">
             <div className="flex items-center mb-3">
@@ -58,6 +62,20 @@ const HealthOCRPage: FC = () => {
               <li>• BMI 狀態評估</li>
             </ul>
           </div>
+
+          {/* 血糖計 */}
+          <div className="bg-white rounded-lg p-6 shadow-sm border-l-4 border-amber-500">
+            <div className="flex items-center mb-3">
+              <Activity className="h-6 w-6 text-amber-500 mr-2" />
+              <h3 className="font-semibold text-gray-800">血糖計</h3>
+            </div>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• 血糖值 (mg/dL 或 mmol/L)</li>
+              <li>• 測量類型 (空腹/餐後)</li>
+              <li>• 自動評估血糖狀態</li>
+              <li>• 參考範圍對照</li>
+            </ul>
+          </div>
         </div>
 
         {/* 使用說明 */}
@@ -77,7 +95,7 @@ const HealthOCRPage: FC = () => {
         </div>
 
         {/* 上傳表單 */}
-        <HealthOCRUploadForm onOCRComplete={handleOCRComplete} />
+        <HealthOCRUploadForm onOCRComplete={handleOCRComplete} onReset={handleReset} />
 
         {/* 識別結果 */}
         {ocrResult && <HealthOCRResults result={ocrResult} />}

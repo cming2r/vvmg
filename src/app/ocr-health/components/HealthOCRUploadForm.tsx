@@ -41,9 +41,10 @@ export interface HealthOCRResult {
 
 interface HealthOCRUploadFormProps {
   onOCRComplete: (result: HealthOCRResult) => void;
+  onReset?: () => void;
 }
 
-const HealthOCRUploadForm: FC<HealthOCRUploadFormProps> = ({ onOCRComplete }) => {
+const HealthOCRUploadForm: FC<HealthOCRUploadFormProps> = ({ onOCRComplete, onReset }) => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [error, setError] = useState<string>('');
@@ -154,6 +155,10 @@ const HealthOCRUploadForm: FC<HealthOCRUploadFormProps> = ({ onOCRComplete }) =>
     setIsProcessing(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    // 清空父組件的識別結果
+    if (onReset) {
+      onReset();
     }
   };
 
