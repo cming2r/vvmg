@@ -19,12 +19,20 @@ export interface BodyMeasurementData {
   weightUnit: 'kg' | 'lbs' | null;            // 體重單位
 }
 
+// 血糖數據介面
+export interface BloodGlucoseData {
+  glucose: number | null;                               // 血糖值
+  unit: 'mg/dL' | 'mmol/L' | null;                     // 血糖單位
+  measurementType?: 'fasting' | 'postprandial' | 'random' | null;  // 測量類型：空腹/餐後/隨機
+}
+
 // 健康 OCR 結果介面
 export interface HealthOCRResult {
   success: boolean;
-  deviceType: 'blood_pressure' | 'body_measurement' | 'unknown';
+  deviceType: 'blood_pressure' | 'body_measurement' | 'blood_glucose' | 'unknown';
   bloodPressure?: BloodPressureData;
   bodyMeasurement?: BodyMeasurementData;
+  bloodGlucose?: BloodGlucoseData;
   date?: string | null;
   time?: string | null;
   rawText: string;
@@ -175,7 +183,7 @@ const HealthOCRUploadForm: FC<HealthOCRUploadFormProps> = ({ onOCRComplete }) =>
             拖曳圖片到這裡 或 點擊上傳
           </p>
           <p className="text-sm text-gray-500">
-            支援血壓計、身高體重計螢幕照片
+            支援血壓計、身高體重計、血糖計螢幕照片
           </p>
           <p className="text-xs text-gray-400 mt-1">
             支援 JPG, PNG, WEBP 等格式，最大15MB

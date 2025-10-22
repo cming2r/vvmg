@@ -85,6 +85,7 @@ const HealthOCRResults: FC<HealthOCRResultsProps> = ({ result }) => {
         <span className="text-sm px-3 py-1 rounded-full bg-blue-100 text-blue-800">
           {result.deviceType === 'blood_pressure' ? '血壓計' :
            result.deviceType === 'body_measurement' ? '身高體重計' :
+           result.deviceType === 'blood_glucose' ? '血糖計' :
            '未知設備'}
         </span>
       </div>
@@ -231,8 +232,89 @@ const HealthOCRResults: FC<HealthOCRResultsProps> = ({ result }) => {
         </div>
       )}
 
+      {/* 血糖數據 */}
+      {result.bloodGlucose && (
+        <div className="mb-6">
+          <div className="flex items-center mb-4">
+            <Activity className="h-5 w-5 text-amber-500 mr-2" />
+            <h3 className="text-lg font-semibold text-gray-800">血糖數據</h3>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {/* 血糖值 */}
+            <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-amber-600 mb-1">
+                    血糖值
+                    {result.bloodGlucose.measurementType && (
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded bg-amber-100">
+                        {result.bloodGlucose.measurementType === 'fasting' ? '空腹' :
+                         result.bloodGlucose.measurementType === 'postprandial' ? '餐後' :
+                         result.bloodGlucose.measurementType === 'random' ? '隨機' : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-3xl font-bold text-amber-700">
+                    {result.bloodGlucose.glucose || '-'}
+                    {result.bloodGlucose.glucose && result.bloodGlucose.unit && (
+                      <span className="text-lg ml-1">{result.bloodGlucose.unit}</span>
+                    )}
+                  </div>
+                </div>
+                {result.bloodGlucose.glucose && (
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600 mb-1">狀態</div>
+                    <div className={`text-lg font-semibold ${
+                      result.bloodGlucose.unit === 'mg/dL' ? (
+                        result.bloodGlucose.glucose < 70 ? 'text-blue-600' :
+                        result.bloodGlucose.glucose <= 100 ? 'text-green-600' :
+                        result.bloodGlucose.glucose <= 125 ? 'text-yellow-600' :
+                        'text-red-600'
+                      ) : (
+                        result.bloodGlucose.glucose < 3.9 ? 'text-blue-600' :
+                        result.bloodGlucose.glucose <= 5.6 ? 'text-green-600' :
+                        result.bloodGlucose.glucose <= 7.0 ? 'text-yellow-600' :
+                        'text-red-600'
+                      )
+                    }`}>
+                      {result.bloodGlucose.unit === 'mg/dL' ? (
+                        result.bloodGlucose.glucose < 70 ? '偏低' :
+                        result.bloodGlucose.glucose <= 100 ? '正常' :
+                        result.bloodGlucose.glucose <= 125 ? '偏高' :
+                        '過高'
+                      ) : (
+                        result.bloodGlucose.glucose < 3.9 ? '偏低' :
+                        result.bloodGlucose.glucose <= 5.6 ? '正常' :
+                        result.bloodGlucose.glucose <= 7.0 ? '偏高' :
+                        '過高'
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 血糖參考範圍 */}
+            <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
+              <div className="font-medium mb-1">血糖參考範圍 (空腹):</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <div className="font-medium text-gray-700 mb-1">mg/dL:</div>
+                  <div>正常: 70-100 | 偏高: 100-125 | 過高: ≥126</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-700 mb-1">mmol/L:</div>
+                  <div>正常: 3.9-5.6 | 偏高: 5.6-7.0 | 過高: ≥7.0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 無數據提示 */}
-      {!result.bloodPressure && !result.bodyMeasurement && (
+      {!result.bloodPressure && !result.bodyMeasurement && !result.bloodGlucose && (
         <div className="text-center py-8 text-gray-500">
           未識別到健康數據，請確保圖片清晰並包含設備螢幕顯示
         </div>
