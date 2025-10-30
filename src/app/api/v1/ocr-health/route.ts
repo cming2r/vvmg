@@ -95,7 +95,12 @@ export async function POST(req: Request) {
         ip_address: ip_address || null,
       });
 
-      console.log('[External API v1] OCR 記錄已保存:', imageUrl);
+      // 只在開發環境輸出詳細資訊
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[External API v1] OCR 記錄已保存:', imageUrl);
+      } else {
+        console.log('[External API v1] OCR 記錄已保存');
+      }
     } catch (logError) {
       // 記錄錯誤但不影響主流程回應
       console.error('[External API v1] 記錄保存失敗:', logError);

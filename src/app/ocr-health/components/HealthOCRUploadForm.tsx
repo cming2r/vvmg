@@ -33,7 +33,8 @@ export interface HealthOCRResult {
   bloodPressure?: BloodPressureData;
   bodyMeasurement?: BodyMeasurementData;
   bloodGlucose?: BloodGlucoseData;
-  date?: string | null;
+  year?: string | null;      // 年份（如：2025）
+  monthday?: string | null;  // 月日（如：10-02）
   time?: string | null;
   rawText: string;
   error?: string;
@@ -106,14 +107,19 @@ const HealthOCRUploadForm: FC<HealthOCRUploadFormProps> = ({ onOCRComplete, onRe
     setError('');
 
     try {
-      // 調用後端 API 使用 GPT-5 進行健康設備 OCR
-      const response = await fetch('/api/ocr-health', {
+      // 調用外部 API (v1) - 包含 R2 上傳和 Supabase 記錄
+      const response = await fetch('/api/v1/ocr-health', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': process.env.NEXT_PUBLIC_OCR_API_KEY || 'f8e7d6c5b4a39281706f5e4d3c2b1a0987654321fedcba0987654321fedcba09', // 測試用 API Key
         },
         body: JSON.stringify({
           image: previewUrl, // base64 格式
+          country_code: 'TW', // 測試用國碼，實際應從用戶資料或 IP 判斷
+          device_type: 'desktop', // 測試用設備類型
+          add_from: 'Web Dashboard', // 測試用來源
+          ip_address: '127.0.0.1', // 測試用 IP，實際應從後端獲取
         }),
       });
 

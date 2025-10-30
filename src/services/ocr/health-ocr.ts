@@ -29,7 +29,8 @@ export interface HealthOCRResult {
   bloodPressure?: BloodPressureData;
   bodyMeasurement?: BodyMeasurementData;
   bloodGlucose?: BloodGlucoseData;
-  date?: string | null;
+  year?: string | null;      // 年份（如：2025）
+  monthday?: string | null;  // 月日（如：10-02）
   time?: string | null;
   rawText: string;
   error?: string;
@@ -62,9 +63,16 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
 1. 首先判斷設備類型
 2. 仔細識別螢幕上顯示的數字
 3. 提取測量日期和時間（如果有）
-   - 日期格式：YYYY-MM-DD
-   - 如果圖片只顯示月日（如 01/15），請使用當前年份 ${new Date().getFullYear()}
-   - 如果完全沒有日期，則不返回 date 欄位
+   - 年份：year（如：2025）
+   - 月日：monthday（格式 MM-DD，例如：10-02）
+   - 如果有完整日期（2025-10-02），請分開為 year: "2025" 和 monthday: "10-02"
+   - 如果只有月日（10/02 或 10-02），只返回 monthday: "10-02"，不返回 year
+   - 如果完全沒有日期，則不返回這兩個欄位
+   - **時間格式**：統一使用 24 小時制（HH:mm）
+     * 如果看到 AM：保持原樣（例如：09:30 AM → "09:30"）
+     * 如果看到 PM：需要轉換（例如：01:00 PM → "13:00"，08:30 PM → "20:30"）
+     * 12:00 PM = "12:00"（中午）
+     * 12:00 AM = "00:00"（午夜）
 4. **重要：識別並返回單位**
    - 血壓：通常是 mmHg
    - 脈搏：通常是 bpm (次/分鐘)
@@ -86,7 +94,8 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
     "diastolic": 80,
     "pulse": 75
   },
-  "date": "2024-01-15",
+  "year": "2024",
+  "monthday": "01-15",
   "time": "09:30"
 }
 
@@ -99,7 +108,8 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
     "weight": 65.2,
     "weightUnit": "kg"
   },
-  "date": "2024-01-15",
+  "year": "2024",
+  "monthday": "01-15",
   "time": "09:30"
 }
 
@@ -111,7 +121,8 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
     "unit": "mg/dL",
     "measurementType": "fasting"
   },
-  "date": "2024-01-15",
+  "year": "2024",
+  "monthday": "01-15",
   "time": "09:30"
 }
 
@@ -121,19 +132,22 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
 }
 
 範例：
-- 血壓計螢幕顯示 "SYS 130 DIA 85 PULSE 72"
-  → {"deviceType": "blood_pressure", "bloodPressure": {"systolic": 130, "diastolic": 85, "pulse": 72}}
+- 血壓計螢幕顯示 "SYS 130 DIA 85 PULSE 72 2024/01/15 09:30 AM"
+  → {"deviceType": "blood_pressure", "bloodPressure": {"systolic": 130, "diastolic": 85, "pulse": 72}, "year": "2024", "monthday": "01-15", "time": "09:30"}
 
-- 體重計顯示 "身高 175cm 體重 70.5kg"
-  → {"deviceType": "body_measurement", "bodyMeasurement": {"height": 175, "heightUnit": "cm", "weight": 70.5, "weightUnit": "kg"}}
+- 血壓計螢幕顯示 "SYS 118 DIA 78 PULSE 76 01:00 PM"（下午時間）
+  → {"deviceType": "blood_pressure", "bloodPressure": {"systolic": 118, "diastolic": 78, "pulse": 76}, "time": "13:00"}
 
-- 體重計顯示 "Height 5.7 ft Weight 154 lbs"
+- 體重計顯示 "身高 175cm 體重 70.5kg 10/02"（只有月日）
+  → {"deviceType": "body_measurement", "bodyMeasurement": {"height": 175, "heightUnit": "cm", "weight": 70.5, "weightUnit": "kg"}, "monthday": "10-02"}
+
+- 體重計顯示 "Height 5.7 ft Weight 154 lbs"（無日期）
   → {"deviceType": "body_measurement", "bodyMeasurement": {"height": 5.7, "heightUnit": "ft", "weight": 154, "weightUnit": "lbs"}}
 
-- 血糖計顯示 "95 mg/dL" 或 "空腹血糖 95"
-  → {"deviceType": "blood_glucose", "bloodGlucose": {"glucose": 95, "unit": "mg/dL", "measurementType": "fasting"}}
+- 血糖計顯示 "95 mg/dL 2024-01-15 08:45 PM" 或 "空腹血糖 95 2024/01/15 20:45"
+  → {"deviceType": "blood_glucose", "bloodGlucose": {"glucose": 95, "unit": "mg/dL", "measurementType": "fasting"}, "year": "2024", "monthday": "01-15", "time": "20:45"}
 
-- 血糖計顯示 "5.3 mmol/L" 或 "餐後血糖 5.3"
+- 血糖計顯示 "5.3 mmol/L" 或 "餐後血糖 5.3"（無日期）
   → {"deviceType": "blood_glucose", "bloodGlucose": {"glucose": 5.3, "unit": "mmol/L", "measurementType": "postprandial"}}
 
 重要：
@@ -163,41 +177,6 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
 }
 
 /**
- * 處理日期格式，如果沒有年份則補上當前年份
- */
-function normalizeDate(dateStr: string | null): string | null {
-  if (!dateStr) return null;
-
-  // 如果已經是完整的 YYYY-MM-DD 格式
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr;
-  }
-
-  // 如果是 MM-DD 或 MM/DD 格式，補上當前年份
-  const currentYear = new Date().getFullYear();
-
-  // 處理 MM-DD 格式
-  if (/^\d{2}-\d{2}$/.test(dateStr)) {
-    return `${currentYear}-${dateStr}`;
-  }
-
-  // 處理 MM/DD 格式
-  if (/^\d{2}\/\d{2}$/.test(dateStr)) {
-    return `${currentYear}-${dateStr.replace('/', '-')}`;
-  }
-
-  // 處理 M-D 或 M/D 格式（單數字月日）
-  const monthDayMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
-  if (monthDayMatch) {
-    const month = monthDayMatch[1].padStart(2, '0');
-    const day = monthDayMatch[2].padStart(2, '0');
-    return `${currentYear}-${month}-${day}`;
-  }
-
-  return dateStr;
-}
-
-/**
  * 解析 AI 回應並驗證數據
  */
 function parseHealthOCRResponse(text: string): HealthOCRResult {
@@ -205,9 +184,9 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
   let bloodPressure: BloodPressureData | undefined;
   let bodyMeasurement: BodyMeasurementData | undefined;
   let bloodGlucose: BloodGlucoseData | undefined;
-  let date: string | null = null;
+  let year: string | null = null;
+  let monthday: string | null = null;
   let time: string | null = null;
-  const rawText = text;
 
   try {
     // 提取 JSON 部分（處理可能的 markdown 包裝）
@@ -217,7 +196,8 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
       const parsed = JSON.parse(jsonStr);
 
       deviceType = parsed.deviceType || 'unknown';
-      date = normalizeDate(parsed.date || null);
+      year = parsed.year || null;
+      monthday = parsed.monthday || null;
       time = parsed.time || null;
 
       // 根據設備類型提取數據
@@ -245,7 +225,8 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
       // 如果沒有 JSON 格式，嘗試直接解析
       const parsed = JSON.parse(text);
       deviceType = parsed.deviceType || 'unknown';
-      date = normalizeDate(parsed.date || null);
+      year = parsed.year || null;
+      monthday = parsed.monthday || null;
       time = parsed.time || null;
 
       if (deviceType === 'blood_pressure' && parsed.bloodPressure) {
@@ -287,13 +268,41 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
     bloodGlucose = validateBloodGlucose(bloodGlucose);
   }
 
+  // 構建乾淨的 JSON 對象作為 rawText
+  const cleanData: Record<string, unknown> = {
+    deviceType,
+  };
+
+  if (bloodPressure) {
+    cleanData.bloodPressure = bloodPressure;
+  }
+  if (bodyMeasurement) {
+    cleanData.bodyMeasurement = bodyMeasurement;
+  }
+  if (bloodGlucose) {
+    cleanData.bloodGlucose = bloodGlucose;
+  }
+  if (year) {
+    cleanData.year = year;
+  }
+  if (monthday) {
+    cleanData.monthday = monthday;
+  }
+  if (time) {
+    cleanData.time = time;
+  }
+
+  // 將乾淨的數據轉換為單行 JSON 字串
+  const rawText = JSON.stringify(cleanData);
+
   return {
     success: true,
     deviceType,
     bloodPressure,
     bodyMeasurement,
     bloodGlucose,
-    date,
+    year,
+    monthday,
     time,
     rawText,
   };

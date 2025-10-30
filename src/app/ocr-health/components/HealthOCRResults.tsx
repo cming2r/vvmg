@@ -91,12 +91,18 @@ const HealthOCRResults: FC<HealthOCRResultsProps> = ({ result }) => {
       </div>
 
       {/* 日期和時間 */}
-      {(result.date || result.time) && (
+      {(result.year || result.monthday || result.time) && (
         <div className="flex gap-6 mb-6 pb-4 border-b border-gray-200">
-          {result.date && (
+          {result.year && (
             <div className="flex items-center text-sm">
-              <span className="font-medium text-gray-600 mr-2">日期:</span>
-              <span className="text-gray-800">{result.date}</span>
+              <span className="font-medium text-gray-600 mr-2">年份:</span>
+              <span className="text-gray-800">{result.year}</span>
+            </div>
+          )}
+          {result.monthday && (
+            <div className="flex items-center text-sm">
+              <span className="font-medium text-gray-600 mr-2">月日:</span>
+              <span className="text-gray-800">{result.monthday}</span>
             </div>
           )}
           {result.time && (

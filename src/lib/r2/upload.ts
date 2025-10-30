@@ -4,16 +4,39 @@ import { randomBytes } from 'crypto';
 // 固定的 bucket 名稱
 const BUCKET_NAME = 'health-scan';
 
-// 初始化 R2 客戶端（使用 S3 兼容 API）
-const r2Client = new S3Client({
-  region: 'auto',
-  endpoint: process.env.R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
-  },
-  forcePathStyle: true, // 使用 path-style URLs for R2
-});
+/**
+ * 初始化 R2 客戶端（延遲初始化以確保環境變數已載入）
+ */
+function getR2Client() {
+  // 檢查環境變數
+  const endpoint = process.env.R2_ENDPOINT;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+
+  if (!endpoint || !accessKeyId || !secretAccessKey) {
+    console.error('R2 環境變數缺失:', {
+      hasEndpoint: !!endpoint,
+      hasAccessKeyId: !!accessKeyId,
+      hasSecretAccessKey: !!secretAccessKey,
+    });
+    throw new Error('R2 credentials not configured');
+  }
+
+  // 只在開發環境輸出 debug 資訊
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[R2] 連接成功');
+  }
+
+  return new S3Client({
+    region: 'auto',
+    endpoint: endpoint,
+    credentials: {
+      accessKeyId: accessKeyId,
+      secretAccessKey: secretAccessKey,
+    },
+    forcePathStyle: true,
+  });
+}
 
 /**
  * 生成 6 位數小寫亂碼
@@ -50,6 +73,8 @@ export async function uploadImageToR2(
     const fileName = `${country}_${randomCode}.${imageType}`;
 
     // 上傳到 R2
+    const r2Client = getR2Client();
+
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: fileName,

@@ -84,7 +84,8 @@ POST https://vvmg.cc/api/v1/ocr-health
     "diastolic": 80,
     "pulse": 75
   },
-  "date": "2024-01-15",
+  "year": "2024",
+  "monthday": "01-15",
   "time": "09:30",
   "rawText": "原始 OCR 文本..."
 }
@@ -97,6 +98,19 @@ POST https://vvmg.cc/api/v1/ocr-health
 | `systolic` | `number \| null` | mmHg | 收縮壓 (正常範圍: 90-120) |
 | `diastolic` | `number \| null` | mmHg | 舒張壓 (正常範圍: 60-80) |
 | `pulse` | `number \| null` | bpm | 脈搏/心率 (正常範圍: 60-100) |
+
+#### 日期時間欄位說明
+
+| 欄位 | 類型 | 格式 | 說明 |
+|------|------|------|------|
+| `year` | `string \| null` | YYYY | 年份（如：2024），如果設備未顯示則為 null |
+| `monthday` | `string \| null` | MM-DD | 月日（如：01-15），如果設備未顯示則為 null |
+| `time` | `string \| null` | HH:mm | 時間，**24小時制**（如：13:00 表示下午1點），如果設備未顯示則為 null |
+
+**時間格式說明**：
+- 統一使用 24 小時制（00:00 ~ 23:59）
+- 如果設備顯示 12 小時制（AM/PM），系統會自動轉換
+- 範例：01:00 PM → "13:00"，08:30 PM → "20:30"
 
 ### 成功響應 - 身高體重計
 
@@ -112,7 +126,8 @@ POST https://vvmg.cc/api/v1/ocr-health
     "weight": 70.2,
     "weightUnit": "kg"
   },
-  "date": "2024-01-15",
+  "year": "2024",
+  "monthday": "01-15",
   "time": "09:30",
   "rawText": "原始 OCR 文本..."
 }
@@ -151,7 +166,8 @@ POST https://vvmg.cc/api/v1/ocr-health
     "unit": "mg/dL",
     "measurementType": "fasting"
   },
-  "date": "2024-01-15",
+  "year": "2024",
+  "monthday": "01-15",
   "time": "09:30",
   "rawText": "原始 OCR 文本..."
 }
