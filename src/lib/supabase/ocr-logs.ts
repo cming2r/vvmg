@@ -21,7 +21,7 @@ export interface HealthScan {
 export async function logOCRHealth(log: HealthScan) {
   try {
     const { data, error } = await supabase
-      .from('health-scan')
+      .from('health_scan')
       .insert({
         image_url: log.image_url,
         ocr_result: log.ocr_result,
