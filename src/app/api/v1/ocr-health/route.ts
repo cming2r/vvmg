@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { processHealthOCR, HealthOCRResult } from '@/services/ocr/health-ocr';
 import { validateApiKey, isRateLimited, getRateLimitInfo, getCorsHeaders } from '@/lib/api/security';
+import { uploadImageToR2 } from '@/lib/r2/upload';
+import { logOCRHealth } from '@/lib/supabase/ocr-logs';
 
 /**
  * 外部 API - 健康設備 OCR v1
@@ -50,19 +52,14 @@ export async function POST(req: Request) {
         },
         {
           status: 429,
-          headers: {
-            ...corsHeaders,
-            'X-RateLimit-Limit': rateLimitPerMinute.toString(),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': rateLimitInfo.resetTime.toString(),
-          },
+          headers: corsHeaders,
         }
       );
     }
 
     // 3. 驗證請求內容
     const body = await req.json();
-    const { image } = body;
+    const { image, country_code, device_type, add_from, ip_address } = body;
 
     if (!image) {
       return NextResponse.json(
@@ -83,17 +80,31 @@ export async function POST(req: Request) {
     // 4. 調用核心處理邏輯（與內部 API 使用相同邏輯）
     const result = await processHealthOCR(image);
 
-    // 5. 獲取速率限制信息
-    const rateLimitInfo = getRateLimitInfo(apiKey!, rateLimitPerMinute);
+    // 5. 上傳圖片到 R2 並記錄到 Supabase
+    try {
+      // 上傳圖片到 R2（傳入國碼）
+      const imageUrl = await uploadImageToR2(image, country_code);
 
-    // 6. 返回結果，附帶 Rate Limit 標頭
+      // 記錄到 Supabase
+      await logOCRHealth({
+        image_url: imageUrl,
+        ocr_result: result,
+        country_code: country_code || null,
+        device_type: device_type || null,
+        add_from: add_from || null,
+        ip_address: ip_address || null,
+      });
+
+      console.log('[External API v1] OCR 記錄已保存:', imageUrl);
+    } catch (logError) {
+      // 記錄錯誤但不影響主流程回應
+      console.error('[External API v1] 記錄保存失敗:', logError);
+      // 即使記錄失敗，仍然返回 OCR 結果給用戶
+    }
+
+    // 6. 返回結果
     return NextResponse.json(result, {
-      headers: {
-        ...corsHeaders,
-        'X-RateLimit-Limit': rateLimitPerMinute.toString(),
-        'X-RateLimit-Remaining': rateLimitInfo.remaining.toString(),
-        'X-RateLimit-Reset': rateLimitInfo.resetTime.toString(),
-      },
+      headers: corsHeaders,
     });
 
   } catch (error) {

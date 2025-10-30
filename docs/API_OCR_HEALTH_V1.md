@@ -42,7 +42,11 @@ POST https://vvmg.cc/api/v1/ocr-health
 
 ```json
 {
-  "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg..."
+  "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...",
+  "country_code": "TW",
+  "device_type": "mobile",
+  "add_from": "iOS App",
+  "ip_address": "203.0.113.1"
 }
 ```
 
@@ -51,6 +55,10 @@ POST https://vvmg.cc/api/v1/ocr-health
 | 參數 | 類型 | 必需 | 說明 |
 |------|------|------|------|
 | `image` | `string` | ✅ | Base64 編碼的圖片字符串，需包含 data URI 前綴 |
+| `country_code` | `string` | ❌ | 國碼（如 TW、HK、US 等） |
+| `device_type` | `string` | ❌ | 設備類型（如 mobile、tablet、desktop） |
+| `add_from` | `string` | ❌ | 來源（如 iOS App、Android App、Web） |
+| `ip_address` | `string` | ❌ | 用戶 IP 位置 |
 
 #### 圖片要求
 
@@ -280,7 +288,7 @@ X-RateLimit-Reset: 1705305600000
 ### JavaScript / Node.js
 
 ```javascript
-async function recognizeHealthDevice(imageBase64) {
+async function recognizeHealthDevice(imageBase64, metadata = {}) {
   try {
     const response = await fetch('https://vvmg.cc/api/v1/ocr-health', {
       method: 'POST',
@@ -289,7 +297,11 @@ async function recognizeHealthDevice(imageBase64) {
         'x-api-key': 'your_api_key_here'
       },
       body: JSON.stringify({
-        image: imageBase64
+        image: imageBase64,
+        country_code: metadata.country_code,    // 可選：如 'TW', 'HK', 'US'
+        device_type: metadata.device_type,      // 可選：如 'mobile', 'tablet'
+        add_from: metadata.add_from,            // 可選：如 'iOS App', 'Android App'
+        ip_address: metadata.ip_address         // 可選：用戶 IP
       })
     });
 
@@ -331,7 +343,17 @@ async function recognizeHealthDevice(imageBase64) {
 
 // 使用範例
 const imageBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRg...';
+
+// 基本使用（不含 metadata）
 recognizeHealthDevice(imageBase64);
+
+// 完整使用（含 metadata）
+recognizeHealthDevice(imageBase64, {
+  country_code: 'TW',
+  device_type: 'mobile',
+  add_from: 'iOS App',
+  ip_address: '203.0.113.1'
+});
 ```
 
 ### cURL
@@ -342,7 +364,11 @@ curl -X POST https://vvmg.cc/api/v1/ocr-health \
   -H "Content-Type: application/json" \
   -H "x-api-key: your_api_key_here" \
   -d '{
-    "image": "data:image/png;base64,iVBORw0KG..."
+    "image": "data:image/png;base64,iVBORw0KG...",
+    "country_code": "TW",
+    "device_type": "mobile",
+    "add_from": "iOS App",
+    "ip_address": "203.0.113.1"
   }'
 
 # 使用文件（需先轉換為 base64）
