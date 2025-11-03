@@ -87,6 +87,7 @@ POST https://vvmg.cc/api/v1/ocr-health
   "year": "2024",
   "monthday": "01-15",
   "time": "09:30",
+  "image_url": "https://pub-80f324273afb494bb00b9dbbd5d970a1.r2.dev/TW_abc123.png",
   "rawText": "原始 OCR 文本..."
 }
 ```
@@ -112,6 +113,18 @@ POST https://vvmg.cc/api/v1/ocr-health
 - 如果設備顯示 12 小時制（AM/PM），系統會自動轉換
 - 範例：01:00 PM → "13:00"，08:30 PM → "20:30"
 
+#### 圖片 URL 欄位說明
+
+| 欄位 | 類型 | 說明 |
+|------|------|------|
+| `image_url` | `string \| null` | 上傳圖片的公開 URL，存儲在 Cloudflare R2，格式：https://pub-80f324273afb494bb00b9dbbd5d970a1.r2.dev/[國碼]_[隨機碼].png |
+
+**說明**：
+- 所有成功的 API 請求都會返回 `image_url`
+- URL 為永久公開連結，可直接訪問
+- 檔名格式：`[國碼]_[6位隨機碼].[副檔名]`（例如：TW_abc123.png）
+- 如果上傳失敗，`image_url` 可能為 null，但不影響 OCR 結果返回
+
 ### 成功響應 - 身高體重計
 
 **HTTP Status**: `200 OK`
@@ -129,6 +142,7 @@ POST https://vvmg.cc/api/v1/ocr-health
   "year": "2024",
   "monthday": "01-15",
   "time": "09:30",
+  "image_url": "https://pub-80f324273afb494bb00b9dbbd5d970a1.r2.dev/TW_abc123.png",
   "rawText": "原始 OCR 文本..."
 }
 ```
@@ -169,6 +183,7 @@ POST https://vvmg.cc/api/v1/ocr-health
   "year": "2024",
   "monthday": "01-15",
   "time": "09:30",
+  "image_url": "https://pub-80f324273afb494bb00b9dbbd5d970a1.r2.dev/TW_abc123.png",
   "rawText": "原始 OCR 文本..."
 }
 ```
@@ -201,6 +216,7 @@ POST https://vvmg.cc/api/v1/ocr-health
 {
   "success": true,
   "deviceType": "unknown",
+  "image_url": "https://pub-80f324273afb494bb00b9dbbd5d970a1.r2.dev/TW_abc123.png",
   "rawText": "原始 OCR 文本..."
 }
 ```

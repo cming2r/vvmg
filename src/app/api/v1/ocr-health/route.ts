@@ -81,9 +81,10 @@ export async function POST(req: Request) {
     const result = await processHealthOCR(image);
 
     // 5. 上傳圖片到 R2 並記錄到 Supabase
+    let imageUrl: string | null = null;
     try {
-      // 上傳圖片到 R2（傳入國碼）
-      const imageUrl = await uploadImageToR2(image, country_code);
+      // 上傳圖片到 R2（傳入國碼），獲得公開 URL
+      imageUrl = await uploadImageToR2(image, country_code);
 
       // 記錄到 Supabase
       await logOCRHealth({
@@ -107,10 +108,16 @@ export async function POST(req: Request) {
       // 即使記錄失敗，仍然返回 OCR 結果給用戶
     }
 
-    // 6. 返回結果
-    return NextResponse.json(result, {
-      headers: corsHeaders,
-    });
+    // 6. 返回結果（包含 image_url）
+    return NextResponse.json(
+      {
+        ...result,
+        image_url: imageUrl, // 添加公開的圖片 URL
+      },
+      {
+        headers: corsHeaders,
+      }
+    );
 
   } catch (error) {
     console.error('[External API v1] 健康設備 OCR 處理錯誤:', error);

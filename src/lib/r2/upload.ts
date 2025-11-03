@@ -4,6 +4,9 @@ import { randomBytes } from 'crypto';
 // 固定的 bucket 名稱
 const BUCKET_NAME = 'health-scan';
 
+// 公開的 R2 URL 基礎路徑
+const PUBLIC_R2_URL = 'https://pub-80f324273afb494bb00b9dbbd5d970a1.r2.dev';
+
 /**
  * 初始化 R2 客戶端（延遲初始化以確保環境變數已載入）
  */
@@ -84,8 +87,8 @@ export async function uploadImageToR2(
 
     await r2Client.send(command);
 
-    // 返回 R2 object key（格式：ocr-health/2025/10/uuid.png）
-    return fileName;
+    // 返回完整的公開 URL（格式：https://pub-80f324273afb494bb00b9dbbd5d970a1.r2.dev/TW_abc123.png）
+    return `${PUBLIC_R2_URL}/${fileName}`;
 
   } catch (error) {
     console.error('R2 上傳失敗:', error);
