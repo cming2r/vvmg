@@ -12,6 +12,7 @@
     "@aws-sdk/client-s3": "^3.920.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.50.3",
+    "@vercel/analytics": "^1.5.0",
     "ai": "^5.0.76",
     "lucide-react": "^0.546.0",
     "next": "15.3.5",
