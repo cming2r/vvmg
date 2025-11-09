@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
       sections: [
         {
           title: '',
-          content: 'Welcome to "Kola Baby Diary" (hereinafter referred to as "the App"). To ensure you can use the App\'s services and features with peace of mind, we hereby explain the App\'s privacy protection policy to safeguard your rights. Please read the following content carefully:'
+          content: 'Welcome to "PicHealth" (hereinafter referred to as "the App"). To ensure you can use the App\'s services and features with peace of mind, we hereby explain the App\'s privacy protection policy to safeguard your rights. Please read the following content carefully:'
         },
         {
           title: '1. Scope of Privacy Protection Policy',
@@ -35,19 +35,16 @@ export default function PrivacyPolicyPage() {
         {
           title: '2. Collection, Processing, and Use of Personal Data',
           items: [
-            'When you register to use the App, we will request your email address as account identification.',
-            'When you use the App\'s baby recording function, we will request your baby\'s basic information, including name, date of birth, gender, etc.',
-            'The App will store your parenting records, including but not limited to feeding, sleep, growth data, etc.',
-            'We use Supabase service for data backup and synchronization. Your parenting records will be securely stored in Supabase cloud service.',
-            'If you choose to use the photo function, we will request camera or photo album access permissions to store your baby\'s growth photos.'
+            'When you use the App, we will request camera permission to photograph health device screens for data recognition.',
+            'When you use the App\'s health data sync function, we will request Apple Health permission to sync recognized data to the Apple Health App.',
+            'We use Supabase service for image recognition, data backup and synchronization, and store your usage information, including but not limited to photos and data.'
           ]
         },
         {
           title: '3. Data Protection',
           items: [
             'The App uses security mechanisms provided by Supabase to ensure your data is fully protected.',
-            'All parenting record data is encrypted before transmission and storage.',
-            'Only caregivers and observers authorized by you can access your baby\'s data.'
+            'All health data is managed by Apple Health App and protected by iOS system-level security.'
           ]
         },
         {
@@ -58,7 +55,6 @@ export default function PrivacyPolicyPage() {
           title: '5. Policy on Sharing Personal Data with Third Parties',
           content: 'The App will never provide, exchange, rent, or sell any of your personal data to other individuals, groups, private enterprises, or public agencies, except in the following circumstances:',
           items: [
-            'Caregivers or observers authorized by you can access your baby\'s data.',
             'With your written consent.',
             'As explicitly required by law.',
             'To prevent danger to your life, body, freedom, or property.',
@@ -68,24 +64,33 @@ export default function PrivacyPolicyPage() {
         {
           title: '6. Data Access and Control',
           items: [
-            'You can view, modify, or delete your stored baby record data anytime in the App.',
-            'You can request us to delete your account and all related data.',
-            'You can obtain baby record data for backup or transfer to other services.'
+            'You can view, modify, or delete your health record data anytime in the Apple Health App.',
+            'You can revoke the App\'s camera permission and Apple Health permission at any time.',
+            'You can delete the App at any time. All local data will be removed, but data in Apple Health will remain for you to manage.'
           ]
         },
         {
-          title: '7. Amendments to Privacy Protection Policy',
-          content: 'The App\'s privacy protection policy may be revised as needed. If you continue to use the App, it means you agree to the revised privacy protection policy.'
+          title: '7. Use of Apple Health Data',
+          items: [
+            'The App will only write OCR-recognized health data to the Apple Health App.',
+            'The App will not read or access other data in Apple Health.',
+            'The App complies with Apple\'s health data usage regulations and will not use health data for advertising or data mining purposes.',
+            'Your health data is completely managed by the Apple Health App. The App serves only as a data input tool.'
+          ]
+        },
+        {
+          title: '8. Amendments to Privacy Protection Policy',
+          content: 'The App\'s privacy protection policy may be revised as needed. The revised policy will be updated on this page. If you continue to use the App, it means you agree to the revised privacy protection policy.'
         }
       ],
-      backToHome: 'Back to Kola'
+      backToHome: 'Back to PicHealth'
     },
     zh: {
       title: '隱私權政策',
       sections: [
         {
           title: '',
-          content: '非常歡迎您使用「Kola 寶寶日記」（以下簡稱本 App），為了讓您能夠安心地使用本 App 的各項服務與功能，特此向您說明本 App 的隱私權保護政策，以保障您的權益，請您詳閱下列內容：'
+          content: '非常歡迎您使用「PicHealth」（以下簡稱本 App），為了讓您能夠安心地使用本 App 的各項服務與功能，特此向您說明本 App 的隱私權保護政策，以保障您的權益，請您詳閱下列內容：'
         },
         {
           title: '一、隱私權保護政策的適用範圍',
@@ -94,19 +99,16 @@ export default function PrivacyPolicyPage() {
         {
           title: '二、個人資料的蒐集、處理及利用方式',
           items: [
-            '當您註冊使用本 App 時，我們會請您提供電子郵件作為帳戶識別。',
-            '當您使用本 App 的寶寶記錄功能時，我們會請您提供寶寶的基本資訊，包括姓名、出生日期、性別等。',
-            '本 App 會儲存您記錄的育兒資訊，包括但不限於餵食、睡眠、成長數據等。',
-            '我們使用 Supabase 服務進行資料備份和同步，您的育兒記錄將安全地儲存在 Supabase 雲端服務中。',
-            '若您選擇使用照片功能，我們會請您提供相機或相簿存取權限，以便儲存寶寶的成長照片。'
+            '當您使用本 App 時，我們會請您提供相機權限，以便拍攝健康設備螢幕進行資料識別。',
+            '當您使用本 App 的健康數據同步功能時，我們會請您提供 Apple 健康權限，以便將識別後的數據同步到 Apple 健康 App。',
+            '我們使用 Supabase 服務進行圖片識別、資料備份和同步，並儲存您記錄的使用資訊，包括但不限於照片、數據等。'
           ]
         },
         {
           title: '三、資料之保護',
           items: [
             '本 App 採用 Supabase 提供的安全機制，確保您的資料受到完善的保護。',
-            '所有育兒記錄資料均經過加密處理後才會傳輸及儲存。',
-            '只有經過您授權的照護者與觀察者才能存取您的寶寶資料。'
+            '所有健康數據由 Apple 健康 App 管理，受到 iOS 系統級的安全保護。'
           ]
         },
         {
@@ -117,7 +119,6 @@ export default function PrivacyPolicyPage() {
           title: '五、與第三人共用個人資料之政策',
           content: '本 App 絕不會提供、交換、出租或出售任何您的個人資料給其他個人、團體、私人企業或公務機關，但有下列情形者除外：',
           items: [
-            '經過您授權的照護者或觀察者可以存取您的寶寶資料。',
             '經由您書面同意。',
             '法律明文規定。',
             '為免除您生命、身體、自由或財產上之危險。',
@@ -127,17 +128,26 @@ export default function PrivacyPolicyPage() {
         {
           title: '六、資料存取與控制',
           items: [
-            '您可以隨時在 App 中檢視、修改或刪除您儲存的寶寶記錄資料。',
-            '您可以要求我們刪除您的帳號及所有相關資料。',
-            '您可以取得寶寶記錄資料，以便備份或轉移到其他服務。'
+            '您可以隨時在 Apple 健康 App 中檢視、修改或刪除您的健康數據。',
+            '您可以隨時撤銷本 App 的相機權限和 Apple 健康權限。',
+            '您可以隨時刪除本 App，所有本地資料將被移除，但 Apple 健康中的數據將保留，由您自行管理。'
           ]
         },
         {
-          title: '七、隱私權保護政策之修正',
-          content: '本 App 隱私權保護政策將因應需求隨時進行修正，若您繼續使用本 App，即表示您同意修改後的隱私權保護政策。'
+          title: '七、Apple 健康數據的使用',
+          items: [
+            '本 App 僅會將 OCR 識別後的健康數據寫入 Apple 健康 App。',
+            '本 App 不會讀取或存取 Apple 健康中的其他數據。',
+            '本 App 遵循 Apple 的健康數據使用規範，不會將健康數據用於廣告或數據挖掘目的。',
+            '您的健康數據完全由 Apple 健康 App 管理，本 App 只是作為數據輸入的工具。'
+          ]
+        },
+        {
+          title: '八、隱私權保護政策之修正',
+          content: '本 App 隱私權保護政策將因應需求隨時進行修正，修正後的政策將會在本頁面更新。若您繼續使用本 App，即表示您同意修改後的隱私權保護政策。'
         }
       ],
-      backToHome: '返回 Kola'
+      backToHome: '返回 PicHealth'
     }
   };
 
@@ -148,8 +158,8 @@ export default function PrivacyPolicyPage() {
       <div className="container mx-auto px-4 max-w-4xl">
         <div className="mb-6 flex items-center justify-between">
           <Link
-            href="/kola"
-            className="inline-flex items-center text-orange-600 hover:text-orange-700 transition-colors"
+            href="/pichealth"
+            className="inline-flex items-center text-green-600 hover:text-green-700 transition-colors"
           >
             <span className="mr-2">←</span>
             {t.backToHome}
@@ -157,7 +167,7 @@ export default function PrivacyPolicyPage() {
 
           <button
             onClick={() => handleLanguageChange(language === 'en' ? 'zh' : 'en')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white font-semibold rounded-full hover:bg-orange-600 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-full hover:bg-green-600 transition-colors"
           >
             <span>🌐</span>
             <span>{language === 'en' ? 'English' : '中文'}</span>
