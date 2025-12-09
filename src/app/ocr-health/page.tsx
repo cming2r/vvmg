@@ -18,7 +18,7 @@ const HealthOCRPage: FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 py-8">
+    <div className="min-h-screen bg-linear-to-br from-green-50 via-blue-50 to-purple-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
         {/* 頁面標題 */}
         <div className="text-center mb-8">
@@ -79,7 +79,7 @@ const HealthOCRPage: FC = () => {
         </div>
 
         {/* 使用說明 */}
-        <div className="bg-gradient-to-r from-blue-50 to-green-50 border-l-4 border-green-600 rounded-r-lg p-6 mb-8">
+        <div className="bg-linear-to-r from-blue-50 to-green-50 border-l-4 border-green-600 rounded-r-lg p-6 mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-3">
             使用說明
           </h2>

@@ -224,7 +224,7 @@ const HealthOCRUploadForm: FC<HealthOCRUploadFormProps> = ({ onOCRComplete, onRe
             <button
               onClick={handleOCRRecognition}
               disabled={isProcessing}
-              className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center shadow-md"
+              className="flex-1 bg-linear-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center shadow-md"
             >
               {isProcessing ? (
                 <>

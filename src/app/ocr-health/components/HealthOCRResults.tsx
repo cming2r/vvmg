@@ -208,7 +208,7 @@ const HealthOCRResults: FC<HealthOCRResultsProps> = ({ result }) => {
           {/* BMI 計算結果 */}
           {bmi && bmiStatus && (
             <div className="space-y-3">
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
+              <div className="bg-linear-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm text-gray-600 mb-1">身體質量指數 (BMI)</div>

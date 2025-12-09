@@ -190,7 +190,7 @@ export default function KolaPage() {
   const t = translations[language];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
+    <div className="min-h-screen bg-linear-to-b from-orange-50 to-white">
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div className="container mx-auto px-4 pt-20 pb-32">
@@ -301,7 +301,7 @@ export default function KolaPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-orange-500 to-orange-600">
+      <section className="py-20 bg-linear-to-r from-orange-500 to-orange-600">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-4xl font-bold text-white mb-6">
             {t.cta.title}

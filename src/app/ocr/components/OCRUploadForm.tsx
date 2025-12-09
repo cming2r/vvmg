@@ -194,7 +194,7 @@ const OCRUploadForm: FC<OCRUploadFormProps> = ({ onOCRComplete }) => {
             <button
               onClick={handleOCRRecognition}
               disabled={isProcessing}
-              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center shadow-md"
+              className="flex-1 bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center shadow-md"
             >
               {isProcessing ? (
                 <>

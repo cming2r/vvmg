@@ -388,7 +388,7 @@ export default function PicHealthPage() {
   const t = translations[language];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-50 to-white">
+    <div className="min-h-screen bg-linear-to-b from-green-50 to-white">
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div className="container mx-auto px-4 pt-20 pb-32">
@@ -472,7 +472,7 @@ export default function PicHealthPage() {
       </section>
 
       {/* Supported Devices */}
-      <section className="py-20 bg-gradient-to-b from-gray-50 to-white">
+      <section className="py-20 bg-linear-to-b from-gray-50 to-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 mb-4">
@@ -525,7 +525,7 @@ export default function PicHealthPage() {
             {t.useCases.items.map((useCase, index) => (
               <div
                 key={index}
-                className="p-8 rounded-2xl bg-gradient-to-br from-green-50 to-white border-2 border-green-100 hover:shadow-lg transition-all"
+                className="p-8 rounded-2xl bg-linear-to-br from-green-50 to-white border-2 border-green-100 hover:shadow-lg transition-all"
               >
                 <div className="flex items-start gap-4">
                   <div className="text-4xl">{useCase.icon}</div>
@@ -591,7 +591,7 @@ export default function PicHealthPage() {
             {t.whyChoose.items.map((item, index) => (
               <div
                 key={index}
-                className="p-8 rounded-2xl bg-gradient-to-br from-white to-green-50 border-2 border-green-100 hover:shadow-lg transition-all"
+                className="p-8 rounded-2xl bg-linear-to-br from-white to-green-50 border-2 border-green-100 hover:shadow-lg transition-all"
               >
                 <div className="flex items-start gap-4">
                   <div className="text-4xl">{item.icon}</div>
@@ -641,7 +641,7 @@ export default function PicHealthPage() {
                   <h3 className="text-lg font-semibold text-gray-900 pr-4">
                     {faq.question}
                   </h3>
-                  <span className="text-2xl text-green-500 flex-shrink-0">
+                  <span className="text-2xl text-green-500 shrink-0">
                     {activeFaq === index ? '−' : '+'}
                   </span>
                 </button>
@@ -659,7 +659,7 @@ export default function PicHealthPage() {
       </section>
 
       {/* Download CTA Section */}
-      <section id="download" className="py-20 bg-gradient-to-r from-green-500 to-green-600">
+      <section id="download" className="py-20 bg-linear-to-r from-green-500 to-green-600">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-4xl font-bold text-white mb-6">
             {t.download.title}
