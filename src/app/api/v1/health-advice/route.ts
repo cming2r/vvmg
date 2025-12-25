@@ -5,6 +5,7 @@ import { validateApiKey, isRateLimited, getRateLimitInfo, getCorsHeaders } from 
 /**
  * 外部 API - 健康建議 v1
  * 需要 API Key 驗證，有速率限制
+ * 支援綜合分析（血壓、心率、血糖）
  */
 
 // ===== 型別定義 =====
@@ -21,24 +22,50 @@ interface UserProfile {
   exercise_frequency?: 'none' | 'light' | 'moderate' | 'active';
 }
 
+interface BloodPressureData {
+  latest?: {
+    systolic: number;
+    diastolic: number;
+    pulse?: number;
+    timestamp: string;
+  };
+  avg_systolic_7days?: number;
+  avg_diastolic_7days?: number;
+  min_systolic_7days?: number;
+  max_systolic_7days?: number;
+  record_count: number;
+}
+
+interface HeartRateData {
+  latest?: {
+    value: number;
+    timestamp: string;
+  };
+  avg_7days?: number;
+  min_7days?: number;
+  max_7days?: number;
+  record_count: number;
+}
+
+interface BloodGlucoseData {
+  latest?: {
+    value: number;
+    type?: 'fasting' | 'postprandial' | 'random';
+    timestamp: string;
+  };
+  avg_7days?: number;
+  record_count: number;
+}
+
 interface HealthData {
-  systolic?: number | null;
-  diastolic?: number | null;
-  heartRate?: number | null;
-  blood_glucose?: number | null;
-  glucose_type?: 'fasting' | 'postprandial' | 'random' | null;
-  measurement_time?: string;
-  avg_systolic_7days?: number | null;
-  avg_diastolic_7days?: number | null;
-  avg_heart_rate_7days?: number | null;
-  min_systolic_7days?: number | null;
-  max_systolic_7days?: number | null;
+  blood_pressure?: BloodPressureData;
+  heart_rate?: HeartRateData;
+  blood_glucose?: BloodGlucoseData;
 }
 
 interface HealthAdviceRequest {
   device_id: string;
   language: string;
-  analysis_type: 'blood_pressure' | 'blood_glucose' | 'heart_rate';
   user_profile?: UserProfile;
   health_data: HealthData;
 }
@@ -100,19 +127,12 @@ export async function POST(req: Request) {
 
     // 3. 解析請求內容
     const body = await req.json();
-    const { device_id, language, analysis_type, user_profile, health_data } = body as HealthAdviceRequest;
+    const { device_id, language, user_profile, health_data } = body as HealthAdviceRequest;
 
     // 4. 驗證必要欄位
     if (!device_id) {
       return NextResponse.json(
         { success: false, error: 'MISSING_DEVICE_ID', message: 'device_id is required' },
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    if (!analysis_type || !['blood_pressure', 'blood_glucose', 'heart_rate'].includes(analysis_type)) {
-      return NextResponse.json(
-        { success: false, error: 'INVALID_ANALYSIS_TYPE', message: 'analysis_type must be one of: blood_pressure, blood_glucose, heart_rate' },
         { status: 400, headers: corsHeaders }
       );
     }
@@ -124,11 +144,22 @@ export async function POST(req: Request) {
       );
     }
 
+    // 檢查是否有任何可分析的數據
+    const hasBloodPressure = health_data.blood_pressure && health_data.blood_pressure.record_count > 0;
+    const hasHeartRate = health_data.heart_rate && health_data.heart_rate.record_count > 0;
+    const hasBloodGlucose = health_data.blood_glucose && health_data.blood_glucose.record_count > 0;
+
+    if (!hasBloodPressure && !hasHeartRate && !hasBloodGlucose) {
+      return NextResponse.json(
+        { success: false, error: 'NO_ANALYZABLE_DATA', message: 'No blood pressure, heart rate, or blood glucose data provided' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
     // 5. 生成健康建議
     const result = await generateHealthAdvice({
       device_id,
       language: language || 'zh-TW',
-      analysis_type,
       user_profile,
       health_data,
     });
@@ -163,10 +194,10 @@ export async function POST(req: Request) {
 // ===== 業務邏輯 =====
 
 async function generateHealthAdvice(request: HealthAdviceRequest) {
-  const { language, user_profile, health_data, analysis_type } = request;
+  const { language, user_profile, health_data } = request;
 
   try {
-    const prompt = buildHealthPrompt(language, user_profile, health_data, analysis_type);
+    const prompt = buildHealthPrompt(language, user_profile, health_data);
 
     const { text } = await generateText({
       model: 'google/gemini-3-flash',
@@ -176,9 +207,15 @@ async function generateHealthAdvice(request: HealthAdviceRequest) {
 
     const jsonResponse = parseHealthAdviceResponse(text);
 
+    // 確定分析了哪些類型
+    const analyzedTypes: string[] = [];
+    if (health_data.blood_pressure?.record_count) analyzedTypes.push('blood_pressure');
+    if (health_data.heart_rate?.record_count) analyzedTypes.push('heart_rate');
+    if (health_data.blood_glucose?.record_count) analyzedTypes.push('blood_glucose');
+
     return {
       success: true,
-      analysis_type,
+      analyzed_types: analyzedTypes,
       ...jsonResponse,
       disclaimer: getDisclaimer(language),
     };
@@ -187,7 +224,6 @@ async function generateHealthAdvice(request: HealthAdviceRequest) {
     console.error('健康建議生成錯誤:', error);
     return {
       success: false,
-      analysis_type,
       error: 'AI_ERROR',
       message: language === 'zh-TW' ? '無法生成健康建議' : 'Unable to generate health advice',
       disclaimer: getDisclaimer(language),
@@ -198,64 +234,117 @@ async function generateHealthAdvice(request: HealthAdviceRequest) {
 function buildHealthPrompt(
   language: string,
   userProfile: UserProfile | undefined,
-  healthData: HealthData,
-  analysisType: string
+  healthData: HealthData
 ): string {
   const lang = language === 'zh-TW' ? '繁體中文' : 'English';
 
-  const bloodPressureReference = `
-## 血壓標準參考
+  // 動態生成數據描述
+  const dataDescriptions: string[] = [];
+
+  if (healthData.blood_pressure?.record_count) {
+    const bp = healthData.blood_pressure;
+    let bpDesc = `### 血壓數據 (${bp.record_count} 筆紀錄)\n`;
+    if (bp.latest) {
+      bpDesc += `- 最新測量: ${bp.latest.systolic}/${bp.latest.diastolic} mmHg`;
+      if (bp.latest.pulse) bpDesc += `，脈搏 ${bp.latest.pulse} bpm`;
+      bpDesc += ` (${bp.latest.timestamp})\n`;
+    }
+    if (bp.avg_systolic_7days) {
+      bpDesc += `- 7日平均: ${bp.avg_systolic_7days.toFixed(0)}/${bp.avg_diastolic_7days?.toFixed(0)} mmHg\n`;
+    }
+    if (bp.min_systolic_7days && bp.max_systolic_7days) {
+      bpDesc += `- 7日收縮壓範圍: ${bp.min_systolic_7days} ~ ${bp.max_systolic_7days} mmHg\n`;
+    }
+    dataDescriptions.push(bpDesc);
+  }
+
+  if (healthData.heart_rate?.record_count) {
+    const hr = healthData.heart_rate;
+    let hrDesc = `### 心率數據 (${hr.record_count} 筆紀錄)\n`;
+    if (hr.latest) {
+      hrDesc += `- 最新測量: ${hr.latest.value} bpm (${hr.latest.timestamp})\n`;
+    }
+    if (hr.avg_7days) {
+      hrDesc += `- 7日平均: ${hr.avg_7days.toFixed(0)} bpm\n`;
+    }
+    if (hr.min_7days && hr.max_7days) {
+      hrDesc += `- 7日範圍: ${hr.min_7days} ~ ${hr.max_7days} bpm\n`;
+    }
+    dataDescriptions.push(hrDesc);
+  }
+
+  if (healthData.blood_glucose?.record_count) {
+    const bg = healthData.blood_glucose;
+    let bgDesc = `### 血糖數據 (${bg.record_count} 筆紀錄)\n`;
+    if (bg.latest) {
+      const typeLabel = bg.latest.type === 'fasting' ? '空腹' :
+                        bg.latest.type === 'postprandial' ? '餐後' :
+                        bg.latest.type === 'random' ? '隨機' : '';
+      bgDesc += `- 最新測量: ${bg.latest.value} mg/dL${typeLabel ? ` (${typeLabel})` : ''} (${bg.latest.timestamp})\n`;
+    }
+    if (bg.avg_7days) {
+      bgDesc += `- 7日平均: ${bg.avg_7days.toFixed(0)} mg/dL\n`;
+    }
+    dataDescriptions.push(bgDesc);
+  }
+
+  const references = `
+## 健康標準參考
+
+### 血壓標準 (mmHg)
 | 等級         | 收縮壓  | 舒張壓 | level    |
 |--------------|---------|--------|----------|
 | 正常         | < 120   | < 80   | normal   |
 | 偏高         | 120-129 | < 80   | elevated |
 | 高血壓第一期 | 130-139 | 80-89  | high     |
 | 高血壓第二期 | ≥ 140   | ≥ 90   | high     |
-| 高血壓危象   | > 180   | > 120  | critical |`;
+| 高血壓危象   | > 180   | > 120  | critical |
 
-  const bloodGlucoseReference = `
-## 血糖標準參考 (mg/dL)
+### 心率標準 (bpm)
+| 等級   | 範圍      | level    |
+|--------|-----------|----------|
+| 過低   | < 60      | elevated |
+| 正常   | 60-100    | normal   |
+| 偏高   | 100-120   | elevated |
+| 過高   | > 120     | high     |
+
+### 血糖標準 (mg/dL)
 | 類型     | 正常    | 偏高      | 糖尿病   |
 |----------|---------|-----------|----------|
 | 空腹血糖 | < 100   | 100-125   | ≥ 126    |
 | 餐後血糖 | < 140   | 140-199   | ≥ 200    |`;
 
-  const reference = analysisType === 'blood_pressure' ? bloodPressureReference :
-                    analysisType === 'blood_glucose' ? bloodGlucoseReference : '';
-
-  return `你是一位專業的健康顧問 AI。請根據以下健康數據提供建議。
+  return `你是一位專業的健康顧問 AI。請根據以下健康數據提供綜合建議。
 
 ## 用戶資料
 ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
 
 ## 健康數據
-${JSON.stringify(healthData, null, 2)}
-
-## 分析類型
-${analysisType}
-${reference}
+${dataDescriptions.join('\n')}
+${references}
 
 ## 要求
 1. 使用 ${lang} 回覆
-2. 評估健康狀態等級：normal（正常）、elevated（偏高）、high（高）、critical（危險）
-3. 提供具體可行的建議
-4. 若數據異常，建議就醫
-5. 顏色代碼：normal=#4CAF50, elevated=#FFA500, high=#FF5722, critical=#F44336
+2. 綜合評估所有提供的健康數據
+3. 評估整體健康狀態等級：normal（正常）、elevated（偏高/需注意）、high（高風險）、critical（危險）
+4. 提供具體可行的建議
+5. 若有任何數據異常，在 warnings 中說明並建議就醫
+6. 顏色代碼：normal=#4CAF50, elevated=#FFA500, high=#FF5722, critical=#F44336
 
 ## 回覆格式（嚴格 JSON）
 {
   "status": {
     "level": "normal|elevated|high|critical",
-    "title": "狀態標題",
-    "description": "詳細描述",
+    "title": "整體健康狀態標題",
+    "description": "綜合評估說明（包含各項指標的簡要分析）",
     "color": "#顏色代碼"
   },
   "advice": {
     "summary": "簡短摘要（50字內）",
-    "details": ["詳細分析1", "詳細分析2"],
-    "lifestyle": ["生活建議1", "生活建議2"],
-    "dietary": ["飲食建議1", "飲食建議2"],
-    "warnings": ["警告事項"],
+    "details": ["詳細分析1", "詳細分析2", "..."],
+    "lifestyle": ["生活建議1", "生活建議2", "..."],
+    "dietary": ["飲食建議1", "飲食建議2", "..."],
+    "warnings": ["警告事項（若無則為空陣列）"],
     "should_see_doctor": false
   }
 }
