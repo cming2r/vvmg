@@ -3,7 +3,7 @@ import { generateText } from 'ai';
 import { validateApiKey, isRateLimited, getRateLimitInfo, getCorsHeaders } from '@/lib/api/security';
 
 /**
- * 外部 API - 健康建議 v1
+ * 外部 API - 健康摘要 v1
  * 需要 API Key 驗證，有速率限制
  * 支援綜合分析（血壓、心率、血糖）
  */
@@ -69,7 +69,7 @@ interface HealthData {
   blood_glucose?: BloodGlucoseData;
 }
 
-interface HealthAdviceRequest {
+interface HealthSummaryRequest {
   device_id: string;
   language: string;
   user_profile?: UserProfile;
@@ -83,8 +83,8 @@ interface StatusResult {
   color: string;
 }
 
-interface AdviceResult {
-  summary: string;
+interface SummaryResult {
+  overview: string;
   details: string[];
   lifestyle: string[];
   dietary: string[];
@@ -133,7 +133,7 @@ export async function POST(req: Request) {
 
     // 3. 解析請求內容
     const body = await req.json();
-    const { device_id, language, user_profile, health_data } = body as HealthAdviceRequest;
+    const { device_id, language, user_profile, health_data } = body as HealthSummaryRequest;
 
     // 4. 驗證必要欄位
     if (!device_id) {
@@ -162,8 +162,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // 5. 生成健康建議
-    const result = await generateHealthAdvice({
+    // 5. 生成健康摘要
+    const result = await generateHealthSummary({
       device_id,
       language: language || 'zh-TW',
       user_profile,
@@ -176,7 +176,7 @@ export async function POST(req: Request) {
       hasHeartRate && 'HR',
       hasBloodGlucose && 'BG',
     ].filter(Boolean).join('+');
-    console.log(`[External API v1] 健康建議已生成 (${analyzedTypes})`);
+    console.log(`[External API v1] 健康摘要已生成 (${analyzedTypes})`);
 
     // 6. 返回結果
     const rateLimitInfo = getRateLimitInfo(apiKey!, rateLimitPerMinute);
@@ -190,7 +190,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-    console.error('[API v1] 健康建議處理錯誤:', error);
+    console.error('[API v1] 健康摘要處理錯誤:', error);
     return NextResponse.json(
       {
         success: false,
@@ -207,7 +207,7 @@ export async function POST(req: Request) {
 
 // ===== 業務邏輯 =====
 
-async function generateHealthAdvice(request: HealthAdviceRequest) {
+async function generateHealthSummary(request: HealthSummaryRequest) {
   const { language, user_profile, health_data } = request;
 
   try {
@@ -219,7 +219,7 @@ async function generateHealthAdvice(request: HealthAdviceRequest) {
       temperature: 0.3,
     });
 
-    const jsonResponse = parseHealthAdviceResponse(text);
+    const jsonResponse = parseHealthSummaryResponse(text);
 
     // 確定分析了哪些類型
     const analyzedTypes: string[] = [];
@@ -235,11 +235,11 @@ async function generateHealthAdvice(request: HealthAdviceRequest) {
     };
 
   } catch (error) {
-    console.error('健康建議生成錯誤:', error);
+    console.error('健康摘要生成錯誤:', error);
     return {
       success: false,
       error: 'AI_ERROR',
-      message: language === 'zh-TW' ? '無法生成健康建議' : 'Unable to generate health advice',
+      message: language === 'zh-TW' ? '無法生成健康摘要' : 'Unable to generate health summary',
       disclaimer: getDisclaimer(language),
     };
   }
@@ -328,7 +328,7 @@ function buildHealthPrompt(
 | 空腹血糖 | < 100   | 100-125   | ≥ 126    |
 | 餐後血糖 | < 140   | 140-199   | ≥ 200    |`;
 
-  return `你是一位專業的健康顧問 AI。請根據以下健康數據提供綜合建議。
+  return `你是一位專業的健康數據分析 AI。請根據以下健康數據提供綜合摘要。
 
 ## 用戶資料
 ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
@@ -341,8 +341,8 @@ ${references}
 1. 使用 ${lang} 回覆
 2. 綜合評估所有提供的健康數據
 3. 評估整體健康狀態等級：normal（正常）、elevated（偏高/需注意）、high（高風險）、critical（危險）
-4. 提供具體可行的建議
-5. 若有任何數據異常，在 warnings 中說明並建議就醫
+4. 提供具體可行的生活提示
+5. 若有任何數據異常，在 warnings 中說明並提示考慮就醫
 6. 顏色代碼：normal=#4CAF50, elevated=#FFA500, high=#FF5722, critical=#F44336
 
 ## 回覆格式（嚴格 JSON）
@@ -353,12 +353,12 @@ ${references}
     "description": "綜合評估說明（包含各項指標的簡要分析）",
     "color": "#顏色代碼"
   },
-  "advice": {
-    "summary": "簡短摘要（50字內）",
+  "summary": {
+    "overview": "簡短摘要（50字內）",
     "details": ["詳細分析1", "詳細分析2", "..."],
-    "lifestyle": ["生活建議1", "生活建議2", "..."],
-    "dietary": ["飲食建議1", "飲食建議2", "..."],
-    "warnings": ["警告事項（若無則為空陣列）"],
+    "lifestyle": ["生活提示1", "生活提示2", "..."],
+    "dietary": ["飲食提示1", "飲食提示2", "..."],
+    "warnings": ["注意事項（若無則為空陣列）"],
     "should_see_doctor": false
   }
 }
@@ -366,7 +366,7 @@ ${references}
 只輸出 JSON，不要其他文字。`;
 }
 
-function parseHealthAdviceResponse(text: string): { status: StatusResult; advice: AdviceResult } {
+function parseHealthSummaryResponse(text: string): { status: StatusResult; summary: SummaryResult } {
   try {
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
 
@@ -381,22 +381,22 @@ function parseHealthAdviceResponse(text: string): { status: StatusResult; advice
           description: parsed.status?.description || '',
           color: parsed.status?.color || '#4CAF50',
         },
-        advice: {
-          summary: parsed.advice?.summary || '',
-          details: parsed.advice?.details || [],
-          lifestyle: parsed.advice?.lifestyle || [],
-          dietary: parsed.advice?.dietary || [],
-          warnings: parsed.advice?.warnings || [],
-          should_see_doctor: parsed.advice?.should_see_doctor || false,
+        summary: {
+          overview: parsed.summary?.overview || '',
+          details: parsed.summary?.details || [],
+          lifestyle: parsed.summary?.lifestyle || [],
+          dietary: parsed.summary?.dietary || [],
+          warnings: parsed.summary?.warnings || [],
+          should_see_doctor: parsed.summary?.should_see_doctor || false,
         },
       };
     }
 
     const parsed = JSON.parse(text);
-    return { status: parsed.status, advice: parsed.advice };
+    return { status: parsed.status, summary: parsed.summary };
 
   } catch (parseError) {
-    console.error('解析健康建議回應失敗:', parseError);
+    console.error('解析健康摘要回應失敗:', parseError);
     return {
       status: {
         level: 'normal',
@@ -404,12 +404,12 @@ function parseHealthAdviceResponse(text: string): { status: StatusResult; advice
         description: '無法解析健康數據',
         color: '#9E9E9E',
       },
-      advice: {
-        summary: '無法生成建議',
+      summary: {
+        overview: '無法生成摘要',
         details: [],
         lifestyle: [],
         dietary: [],
-        warnings: ['建議諮詢醫療專業人員'],
+        warnings: ['如有疑慮請諮詢醫療專業人員'],
         should_see_doctor: true,
       },
     };
@@ -418,6 +418,6 @@ function parseHealthAdviceResponse(text: string): { status: StatusResult; advice
 
 function getDisclaimer(language: string): string {
   return language === 'zh-TW'
-    ? '此建議由 AI 生成，僅供參考，不能替代專業醫療診斷。如有健康疑慮，請諮詢醫生。'
-    : 'This advice is AI-generated for reference only and cannot replace professional medical diagnosis. Please consult a doctor if you have health concerns.';
+    ? '此摘要由 AI 生成，僅供參考，不能替代專業醫療診斷。如有健康疑慮，請諮詢醫生。'
+    : 'This summary is AI-generated for reference only and cannot replace professional medical diagnosis. Please consult a doctor if you have health concerns.';
 }
