@@ -12,14 +12,20 @@ import { validateApiKey, isRateLimited, getRateLimitInfo, getCorsHeaders } from 
 
 interface UserProfile {
   age?: number;
-  gender?: 'male' | 'female' | 'other';
+  gender?: 'male' | 'female';
   height?: number;
   weight?: number;
   has_hypertension?: boolean;
   has_diabetes?: boolean;
   has_heart_disease?: boolean;
-  is_smoker?: boolean;
-  exercise_frequency?: 'none' | 'light' | 'moderate' | 'active';
+  has_high_cholesterol?: boolean;
+  // 生活習慣（基於國際標準）
+  // CDC/SNOMED CT
+  smoking_status?: 'never' | 'former' | 'current_occasional' | 'current_light' | 'current_heavy';
+  // WHO AUDIT-C
+  drinking_frequency?: 'never' | 'monthly_less' | 'monthly_2_4' | 'weekly_2_3' | 'weekly_4_more';
+  // WHO 2020
+  physical_activity_level?: 'inactive' | 'insufficient' | 'active' | 'highly_active';
 }
 
 interface BloodPressureData {
@@ -163,6 +169,14 @@ export async function POST(req: Request) {
       user_profile,
       health_data,
     });
+
+    // Log 請求資訊
+    const analyzedTypes = [
+      hasBloodPressure && 'BP',
+      hasHeartRate && 'HR',
+      hasBloodGlucose && 'BG',
+    ].filter(Boolean).join('+');
+    console.log(`[External API v1] 健康建議已生成 (${analyzedTypes})`);
 
     // 6. 返回結果
     const rateLimitInfo = getRateLimitInfo(apiKey!, rateLimitPerMinute);
