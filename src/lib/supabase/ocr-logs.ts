@@ -39,6 +39,8 @@ export interface HealthSummaryLog {
   // 輸出
   summary_result: object;
   // 用戶資料
+  device_id?: string | null;
+  remaining_credits?: number | null;
   ip_address?: string | null;
   country_code?: string | null;
   client_info?: ClientInfo | null;
@@ -58,6 +60,8 @@ export async function logHealthSummary(log: HealthSummaryLog) {
         user_profile: log.user_profile || null,
         custom_note: log.custom_note || null,
         summary_result: log.summary_result,
+        device_id: log.device_id || null,
+        remaining_credits: log.remaining_credits ?? null,
         ip_address: log.ip_address || null,
         country_code: log.country_code || null,
         client_info: log.client_info || {},

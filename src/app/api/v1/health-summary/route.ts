@@ -170,7 +170,8 @@ export async function POST(req: Request) {
 
     // 3. 解析請求內容
     const body = await req.json();
-    const { device_id, language, user_profile, health_data, custom_note, ip_address, country_code, client_info } = body as HealthSummaryRequest & {
+    const { device_id, language, user_profile, health_data, custom_note, remaining_credits, ip_address, country_code, client_info } = body as HealthSummaryRequest & {
+      remaining_credits?: number;
       ip_address?: string;
       country_code?: string;
       client_info?: { os?: string; device?: string; browser?: string };
@@ -228,6 +229,8 @@ export async function POST(req: Request) {
         // 輸出
         summary_result: result,
         // 用戶資料
+        device_id: device_id || null,
+        remaining_credits: remaining_credits ?? null,
         ip_address: ip_address || null,
         country_code: country_code || null,
         client_info: client_info || null,
