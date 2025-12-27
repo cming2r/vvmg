@@ -7,6 +7,7 @@ import { HealthOCRResult } from '@/services/ocr/health-ocr';
 export interface HealthScan {
   image_url: string;
   ocr_result: HealthOCRResult;
+  device_id?: string | null;
   country_code?: string | null;
   device_type?: string | null;
   add_from?: string | null;
@@ -88,6 +89,7 @@ export async function logOCRHealth(log: HealthScan) {
       .insert({
         image_url: log.image_url,
         ocr_result: log.ocr_result,
+        device_id: log.device_id || null,
         country_code: log.country_code || null,
         device_type: log.device_type || null,
         add_from: log.add_from || null,

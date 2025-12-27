@@ -22,19 +22,19 @@ export function validateApiKey(apiKey: string | null): boolean {
 
 /**
  * 檢查是否超過速率限制
- * @param apiKey - API Key（用作識別）
+ * @param identifier - 識別符（可以是 API Key、device_id 等）
  * @param limitPerMinute - 每分鐘允許的請求數（默認 10）
  * @returns 是否超過限制
  */
-export function isRateLimited(apiKey: string, limitPerMinute: number = 10): boolean {
+export function isRateLimited(identifier: string, limitPerMinute: number = 10): boolean {
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 分鐘
 
-  const record = rateLimitStore.get(apiKey);
+  const record = rateLimitStore.get(identifier);
 
   // 如果沒有記錄或已過期，創建新記錄
   if (!record || now > record.resetTime) {
-    rateLimitStore.set(apiKey, {
+    rateLimitStore.set(identifier, {
       count: 1,
       resetTime: now + windowMs,
     });
@@ -48,22 +48,22 @@ export function isRateLimited(apiKey: string, limitPerMinute: number = 10): bool
 
   // 增加計數
   record.count += 1;
-  rateLimitStore.set(apiKey, record);
+  rateLimitStore.set(identifier, record);
 
   return false;
 }
 
 /**
  * 獲取剩餘請求次數和重置時間
- * @param apiKey - API Key
+ * @param identifier - 識別符（可以是 API Key、device_id 等）
  * @param limitPerMinute - 每分鐘限制
  * @returns 剩餘次數和重置時間
  */
-export function getRateLimitInfo(apiKey: string, limitPerMinute: number = 10): {
+export function getRateLimitInfo(identifier: string, limitPerMinute: number = 10): {
   remaining: number;
   resetTime: number;
 } {
-  const record = rateLimitStore.get(apiKey);
+  const record = rateLimitStore.get(identifier);
   const now = Date.now();
 
   if (!record || now > record.resetTime) {

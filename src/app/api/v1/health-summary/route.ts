@@ -113,20 +113,20 @@ interface HealthSummaryRequest {
   custom_note?: string;
 }
 
-interface StatusResult {
-  level: 'normal' | 'elevated' | 'high' | 'critical';
-  title: string;
-  description: string;
-  color: string;
-}
-
 interface SummaryResult {
-  overview: string;
-  details: string[];
-  lifestyle: string[];
-  dietary: string[];
-  warnings: string[];
-  should_see_doctor: boolean;
+  data_recap: {
+    title: string;
+    items: string[];
+  };
+  reference_standards: {
+    title: string;
+    items: string[];
+    source: string;
+  };
+  next_steps: {
+    title: string;
+    items: string[];
+  };
 }
 
 // ===== API Routes =====
@@ -153,22 +153,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Rate Limiting 檢查
-    const rateLimitPerMinute = parseInt(process.env.RATE_LIMIT_PER_MINUTE || '10');
-    if (isRateLimited(apiKey!, rateLimitPerMinute)) {
-      const rateLimitInfo = getRateLimitInfo(apiKey!, rateLimitPerMinute);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'RATE_LIMIT_EXCEEDED',
-          message: 'Too many requests. Please try again later.',
-          resetTime: new Date(rateLimitInfo.resetTime).toISOString(),
-        },
-        { status: 429, headers: corsHeaders }
-      );
-    }
-
-    // 3. 解析請求內容
+    // 2. 解析請求內容（需要先取得 device_id）
     const body = await req.json();
     const { device_id, language, user_profile, health_data, custom_note, remaining_credits, ip_address, country_code, client_info } = body as HealthSummaryRequest & {
       remaining_credits?: number;
@@ -177,11 +162,26 @@ export async function POST(req: Request) {
       client_info?: { os?: string; device?: string; browser?: string };
     };
 
-    // 4. 驗證必要欄位
+    // 3. 驗證必要欄位
     if (!device_id) {
       return NextResponse.json(
         { success: false, error: 'MISSING_DEVICE_ID', message: 'device_id is required' },
         { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // 4. Rate Limiting 檢查（per device_id，非 per API key）
+    const rateLimitPerMinute = parseInt(process.env.RATE_LIMIT_PER_MINUTE || '5');
+    if (isRateLimited(device_id, rateLimitPerMinute)) {
+      const rateLimitInfo = getRateLimitInfo(device_id, rateLimitPerMinute);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'RATE_LIMIT_EXCEEDED',
+          message: 'Too many requests. Please try again later.',
+          resetTime: new Date(rateLimitInfo.resetTime).toISOString(),
+        },
+        { status: 429, headers: corsHeaders }
       );
     }
 
@@ -242,7 +242,7 @@ export async function POST(req: Request) {
     }
 
     // 6. 返回結果
-    const rateLimitInfo = getRateLimitInfo(apiKey!, rateLimitPerMinute);
+    const rateLimitInfo = getRateLimitInfo(device_id, rateLimitPerMinute);
     return NextResponse.json(result, {
       headers: {
         ...corsHeaders,
@@ -295,11 +295,14 @@ async function generateHealthSummary(request: HealthSummaryRequest) {
       analyzedTypes.push('custom_note');
     }
 
+    // 覆寫 source 為固定來源（避免 AI 幻覺）
+    const officialSource = getOfficialSource(language, analyzedTypes);
+    jsonResponse.reference_standards.source = officialSource;
+
     return {
       success: true,
       analyzed_types: analyzedTypes,
-      ...jsonResponse,
-      disclaimer: getDisclaimer(language),
+      summary: jsonResponse,
     };
 
   } catch (error) {
@@ -308,7 +311,6 @@ async function generateHealthSummary(request: HealthSummaryRequest) {
       success: false,
       error: 'AI_ERROR',
       message: language === 'zh-TW' ? '無法生成健康摘要' : 'Unable to generate health summary',
-      disclaimer: getDisclaimer(language),
     };
   }
 }
@@ -474,9 +476,29 @@ function buildHealthPrompt(
   // 根據是否有健康數據調整提示詞
   const hasHealthData = dataDescriptions.length > 0;
 
+  const outputFormat = `
+## 回覆格式（嚴格 JSON）
+{
+  "data_recap": {
+    "title": "您提供的數據",
+    "items": ["數據項目1", "數據項目2", "..."]
+  },
+  "reference_standards": {
+    "title": "參考標準",
+    "items": ["根據○○指引，標準範圍為...", "..."],
+    "source": "資料來源（如：衛生福利部國民健康署、WHO、AHA 等）"
+  },
+  "next_steps": {
+    "title": "下一步建議",
+    "items": ["建議將此摘要提供給您的醫師參考", "..."]
+  }
+}
+
+只輸出 JSON，不要其他文字。`;
+
   if (!hasHealthData && customNote) {
     // 只有補充說明，沒有健康數據
-    return `你是一位專業的健康諮詢 AI。用戶提出了一個健康相關的問題，請針對性地回答。
+    return `你是一位健康衛教 AI 助手。用戶提出了健康相關問題，請以衛教角度回答。
 
 ## 用戶資料
 ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
@@ -485,78 +507,47 @@ ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
 ${customNote}
 ${references}
 
-## 重要原則
-1. **聚焦回答**：只回答用戶實際提出的問題，不要延伸到其他健康話題
-2. 若用戶問的是簡單的數據查詢（如「我的身高是否正常」），直接回答該問題即可
-3. 不要主動分析用戶沒有詢問的指標（如：用戶只問身高，不要主動分析 BMI、體重、運動量等）
-4. 只有當用戶明確詢問或描述症狀時，才提供相關的生活/飲食建議
-5. 若問題簡單明確，details 只需 1-2 項，lifestyle/dietary/warnings 可為空陣列
+## 重要原則（法律安全）
+1. **不做診斷**：絕對不能說「你有○○症」、「你過重」、「你的血壓偏高」等診斷性用語
+2. **只陳述事實**：例如「您的 BMI 計算結果為 25.3」，不說「您過重」
+3. **引用官方標準**：提供參考範圍時，務必註明來源（WHO、衛福部、AHA 等）
+4. **永遠導向專業**：next_steps 必須包含「建議諮詢醫師/營養師/專業人員」
+5. **聚焦回答**：只回答用戶實際提出的問題，不延伸到其他話題
 
 ## 要求
 1. 使用 ${lang} 回覆
-2. 評估等級：normal（一般資訊）、elevated（需注意）、high（建議就醫）、critical（緊急）
-3. 顏色代碼：normal=#4CAF50, elevated=#FFA500, high=#FF5722, critical=#F44336
-
-## 回覆格式（嚴格 JSON）
-{
-  "status": {
-    "level": "normal|elevated|high|critical",
-    "title": "簡潔的回答標題",
-    "description": "直接回答用戶的問題",
-    "color": "#顏色代碼"
-  },
-  "summary": {
-    "overview": "一句話回答用戶問題",
-    "details": ["針對問題的說明（1-3項即可）"],
-    "lifestyle": ["只在相關時提供，否則為空陣列"],
-    "dietary": ["只在相關時提供，否則為空陣列"],
-    "warnings": ["只在必要時提供，否則為空陣列"],
-    "should_see_doctor": false
-  }
-}
-
-只輸出 JSON，不要其他文字。`;
+2. data_recap：整理用戶提供的數據（純客觀陳述）
+3. reference_standards：引用官方標準，讓用戶自行比對
+4. next_steps：永遠指向專業人士
+${outputFormat}`;
   }
 
-  return `你是一位專業的健康數據分析 AI。請根據以下健康數據提供綜合摘要。
+  return `你是一位健康衛教 AI 助手。請根據以下健康數據提供衛教資訊。
 
 ## 用戶資料
 ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
 ${customNoteSection}
-## 健康數據
+## 健康數據（最近 30 天內的紀錄）
 ${dataDescriptions.join('\n')}
 ${references}
 
+## 重要原則（法律安全）
+1. **不做診斷**：絕對不能說「你有高血壓」、「你過重」、「你的血糖偏高」等診斷性用語
+2. **只陳述事實**：例如「您的平均收縮壓為 135 mmHg」，不說「您血壓偏高」
+3. **引用官方標準**：提供參考範圍時，務必註明來源（WHO、衛福部、AHA 等）
+4. **永遠導向專業**：next_steps 必須包含「建議將此摘要提供給您的醫師參考」
+5. **不給具體建議**：不說「你應該少吃鹽」，改說「如需飲食建議，請諮詢營養師」
+6. **說明時效性**：在 data_recap 中註明這些是「最近 30 天內」的紀錄
+
 ## 要求
 1. 使用 ${lang} 回覆
-2. 綜合評估所有提供的健康數據，注意分析每筆紀錄的時間趨勢變化
-3. 評估整體健康狀態等級：normal（正常）、elevated（偏高/需注意）、high（高風險）、critical（危險）
-4. 提供具體可行的生活提示
-5. 若有任何數據異常或趨勢惡化，在 warnings 中說明並提示考慮就醫
-6. 顏色代碼：normal=#4CAF50, elevated=#FFA500, high=#FF5722, critical=#F44336
-
-## 回覆格式（嚴格 JSON）
-{
-  "status": {
-    "level": "normal|elevated|high|critical",
-    "title": "整體健康狀態標題",
-    "description": "綜合評估說明（包含各項指標的簡要分析）",
-    "color": "#顏色代碼"
-  },
-  "summary": {
-    "overview": "簡短摘要（50字內）",
-    "details": ["詳細分析1", "詳細分析2", "..."],
-    "lifestyle": ["生活提示1", "生活提示2", "..."],
-    "dietary": ["飲食提示1", "飲食提示2", "..."],
-    "warnings": ["注意事項（若無則為空陣列）"],
-    "should_see_doctor": false
-  }
+2. data_recap：整理用戶上傳的數值（含計算值如 BMI），純客觀陳述
+3. reference_standards：引用官方健康標準，讓用戶自行比對，務必註明來源
+4. next_steps：永遠指向專業人士（醫師、營養師等）
+${outputFormat}`;
 }
 
-只輸出 JSON，不要其他文字。`;
-}
-
-function parseHealthSummaryResponse(text: string): { status: StatusResult; summary: SummaryResult } {
+function parseHealthSummaryResponse(text: string): SummaryResult {
   try {
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
 
@@ -565,49 +556,80 @@ function parseHealthSummaryResponse(text: string): { status: StatusResult; summa
       const parsed = JSON.parse(jsonStr);
 
       return {
-        status: {
-          level: parsed.status?.level || 'normal',
-          title: parsed.status?.title || '',
-          description: parsed.status?.description || '',
-          color: parsed.status?.color || '#4CAF50',
+        data_recap: {
+          title: parsed.data_recap?.title || '您提供的數據',
+          items: parsed.data_recap?.items || [],
         },
-        summary: {
-          overview: parsed.summary?.overview || '',
-          details: parsed.summary?.details || [],
-          lifestyle: parsed.summary?.lifestyle || [],
-          dietary: parsed.summary?.dietary || [],
-          warnings: parsed.summary?.warnings || [],
-          should_see_doctor: parsed.summary?.should_see_doctor || false,
+        reference_standards: {
+          title: parsed.reference_standards?.title || '參考標準',
+          items: parsed.reference_standards?.items || [],
+          source: parsed.reference_standards?.source || '',
+        },
+        next_steps: {
+          title: parsed.next_steps?.title || '下一步建議',
+          items: parsed.next_steps?.items || ['建議諮詢專業醫療人員'],
         },
       };
     }
 
     const parsed = JSON.parse(text);
-    return { status: parsed.status, summary: parsed.summary };
+    return {
+      data_recap: parsed.data_recap,
+      reference_standards: parsed.reference_standards,
+      next_steps: parsed.next_steps,
+    };
 
   } catch (parseError) {
     console.error('解析健康摘要回應失敗:', parseError);
     return {
-      status: {
-        level: 'normal',
-        title: '無法分析',
-        description: '無法解析健康數據',
-        color: '#9E9E9E',
+      data_recap: {
+        title: '您提供的數據',
+        items: ['無法解析數據'],
       },
-      summary: {
-        overview: '無法生成摘要',
-        details: [],
-        lifestyle: [],
-        dietary: [],
-        warnings: ['如有疑慮請諮詢醫療專業人員'],
-        should_see_doctor: true,
+      reference_standards: {
+        title: '參考標準',
+        items: [],
+        source: '',
+      },
+      next_steps: {
+        title: '下一步建議',
+        items: ['如有健康疑慮，請諮詢專業醫療人員'],
       },
     };
   }
 }
 
-function getDisclaimer(language: string): string {
-  return language === 'zh-TW'
-    ? '此摘要由 AI 生成，僅供參考，不能替代專業醫療診斷。如有健康疑慮，請諮詢醫生。'
-    : 'This summary is AI-generated for reference only and cannot replace professional medical diagnosis. Please consult a doctor if you have health concerns.';
+/**
+ * 根據分析的數據類型返回官方來源（固定值，避免 AI 幻覺）
+ */
+function getOfficialSource(language: string, analyzedTypes: string[]): string {
+  const sources: string[] = [];
+
+  if (analyzedTypes.includes('blood_pressure')) {
+    sources.push(language === 'zh-TW' ? '美國心臟協會 (AHA)' : 'American Heart Association (AHA)');
+  }
+  if (analyzedTypes.includes('heart_rate')) {
+    sources.push(language === 'zh-TW' ? '美國心臟協會 (AHA)' : 'American Heart Association (AHA)');
+  }
+  if (analyzedTypes.includes('blood_glucose')) {
+    sources.push(language === 'zh-TW' ? '美國糖尿病協會 (ADA)' : 'American Diabetes Association (ADA)');
+  }
+  if (analyzedTypes.includes('body_fat')) {
+    sources.push(language === 'zh-TW' ? '美國運動醫學會 (ACSM)' : 'American College of Sports Medicine (ACSM)');
+  }
+  if (analyzedTypes.includes('blood_oxygen')) {
+    sources.push(language === 'zh-TW' ? '世界衛生組織 (WHO)' : 'World Health Organization (WHO)');
+  }
+  if (analyzedTypes.includes('custom_note')) {
+    sources.push(language === 'zh-TW' ? '衛生福利部國民健康署' : 'Health Promotion Administration, Ministry of Health and Welfare');
+  }
+
+  // 去重
+  const uniqueSources = [...new Set(sources)];
+
+  if (uniqueSources.length === 0) {
+    return language === 'zh-TW' ? '衛生福利部國民健康署' : 'Health Promotion Administration';
+  }
+
+  return uniqueSources.join('、');
 }
