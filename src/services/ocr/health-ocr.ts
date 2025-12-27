@@ -22,13 +22,26 @@ export interface BloodGlucoseData {
   measurementType?: 'fasting' | 'postprandial' | 'random' | null;  // 測量類型：空腹/餐後/隨機
 }
 
+// 體脂肪率數據介面
+export interface BodyFatData {
+  percentage: number | null;              // 體脂肪率 %
+}
+
+// 血氧濃度數據介面
+export interface BloodOxygenData {
+  saturation: number | null;              // 血氧飽和度 % (SpO2)
+  pulse: number | null;                   // 脈搏 bpm（血氧機通常也會顯示脈搏）
+}
+
 // 健康 OCR 結果介面
 export interface HealthOCRResult {
   success: boolean;
-  deviceType: 'blood_pressure' | 'body_measurement' | 'blood_glucose' | 'unknown';
+  deviceType: 'blood_pressure' | 'body_measurement' | 'blood_glucose' | 'body_fat' | 'blood_oxygen' | 'unknown';
   bloodPressure?: BloodPressureData;
   bodyMeasurement?: BodyMeasurementData;
   bloodGlucose?: BloodGlucoseData;
+  bodyFat?: BodyFatData;
+  bloodOxygen?: BloodOxygenData;
   year?: string | null;      // 年份（如：2025）
   monthday?: string | null;  // 月日（如：10-02）
   time?: string | null;
@@ -58,6 +71,8 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
 1. **血壓計** - 顯示收縮壓(SYS)、舒張壓(DIA)、脈搏(PULSE)
 2. **身高體重計** - 顯示身高(cm)、體重(kg)
 3. **血糖計** - 顯示血糖值（mg/dL 或 mmol/L）
+4. **體脂計** - 顯示體脂肪率（%）
+5. **血氧機/脈搏血氧儀** - 顯示血氧濃度(SpO2)和脈搏
 
 識別指示：
 1. 首先判斷設備類型
@@ -79,6 +94,8 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
    - 身高：可能是 cm、ft（英尺）或 in（英寸）
    - 體重：可能是 kg 或 lbs（磅）
    - 血糖：可能是 mg/dL（毫克/分升）或 mmol/L（毫摩爾/升）
+   - 體脂肪率：% (百分比)
+   - 血氧濃度：% (百分比，通常標示為 SpO2)
 5. 支援的單位：
    - heightUnit: "cm" | "ft" | "in"
    - weightUnit: "kg" | "lbs"
@@ -126,6 +143,29 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
   "time": "09:30"
 }
 
+**如果是體脂計：**
+{
+  "deviceType": "body_fat",
+  "bodyFat": {
+    "percentage": 22.5
+  },
+  "year": "2024",
+  "monthday": "01-15",
+  "time": "09:30"
+}
+
+**如果是血氧機：**
+{
+  "deviceType": "blood_oxygen",
+  "bloodOxygen": {
+    "saturation": 98,
+    "pulse": 72
+  },
+  "year": "2024",
+  "monthday": "01-15",
+  "time": "09:30"
+}
+
 **如果無法識別：**
 {
   "deviceType": "unknown"
@@ -149,6 +189,12 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
 
 - 血糖計顯示 "5.3 mmol/L" 或 "餐後血糖 5.3"（無日期）
   → {"deviceType": "blood_glucose", "bloodGlucose": {"glucose": 5.3, "unit": "mmol/L", "measurementType": "postprandial"}}
+
+- 體脂計顯示 "體脂肪率 22.5%" 或 "Body Fat 22.5%"
+  → {"deviceType": "body_fat", "bodyFat": {"percentage": 22.5}}
+
+- 血氧機顯示 "SpO2 98% PR 72" 或 "血氧 98 脈搏 72"
+  → {"deviceType": "blood_oxygen", "bloodOxygen": {"saturation": 98, "pulse": 72}}
 
 重要：
 - 數值必須是數字類型（number），不要加引號
@@ -180,10 +226,12 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
  * 解析 AI 回應並驗證數據
  */
 function parseHealthOCRResponse(text: string): HealthOCRResult {
-  let deviceType: 'blood_pressure' | 'body_measurement' | 'blood_glucose' | 'unknown' = 'unknown';
+  let deviceType: 'blood_pressure' | 'body_measurement' | 'blood_glucose' | 'body_fat' | 'blood_oxygen' | 'unknown' = 'unknown';
   let bloodPressure: BloodPressureData | undefined;
   let bodyMeasurement: BodyMeasurementData | undefined;
   let bloodGlucose: BloodGlucoseData | undefined;
+  let bodyFat: BodyFatData | undefined;
+  let bloodOxygen: BloodOxygenData | undefined;
   let year: string | null = null;
   let monthday: string | null = null;
   let time: string | null = null;
@@ -220,6 +268,15 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
           unit: parsed.bloodGlucose.unit || null,
           measurementType: parsed.bloodGlucose.measurementType || null,
         };
+      } else if (deviceType === 'body_fat' && parsed.bodyFat) {
+        bodyFat = {
+          percentage: parsed.bodyFat.percentage || null,
+        };
+      } else if (deviceType === 'blood_oxygen' && parsed.bloodOxygen) {
+        bloodOxygen = {
+          saturation: parsed.bloodOxygen.saturation || null,
+          pulse: parsed.bloodOxygen.pulse || null,
+        };
       }
     } else {
       // 如果沒有 JSON 格式，嘗試直接解析
@@ -248,6 +305,15 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
           unit: parsed.bloodGlucose.unit || null,
           measurementType: parsed.bloodGlucose.measurementType || null,
         };
+      } else if (deviceType === 'body_fat' && parsed.bodyFat) {
+        bodyFat = {
+          percentage: parsed.bodyFat.percentage || null,
+        };
+      } else if (deviceType === 'blood_oxygen' && parsed.bloodOxygen) {
+        bloodOxygen = {
+          saturation: parsed.bloodOxygen.saturation || null,
+          pulse: parsed.bloodOxygen.pulse || null,
+        };
       }
     }
   } catch (parseError) {
@@ -268,6 +334,14 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
     bloodGlucose = validateBloodGlucose(bloodGlucose);
   }
 
+  if (bodyFat) {
+    bodyFat = validateBodyFat(bodyFat);
+  }
+
+  if (bloodOxygen) {
+    bloodOxygen = validateBloodOxygen(bloodOxygen);
+  }
+
   // 構建乾淨的 JSON 對象作為 rawText
   const cleanData: Record<string, unknown> = {
     deviceType,
@@ -281,6 +355,12 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
   }
   if (bloodGlucose) {
     cleanData.bloodGlucose = bloodGlucose;
+  }
+  if (bodyFat) {
+    cleanData.bodyFat = bodyFat;
+  }
+  if (bloodOxygen) {
+    cleanData.bloodOxygen = bloodOxygen;
   }
   if (year) {
     cleanData.year = year;
@@ -301,6 +381,8 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
     bloodPressure,
     bodyMeasurement,
     bloodGlucose,
+    bodyFat,
+    bloodOxygen,
     year,
     monthday,
     time,
@@ -312,14 +394,17 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
  * 驗證血壓數據合理性
  */
 function validateBloodPressure(data: BloodPressureData): BloodPressureData {
-  // 血壓範圍驗證 (一般範圍：收縮壓 70-250, 舒張壓 40-150, 脈搏 40-200)
-  if (data.systolic && (data.systolic < 70 || data.systolic > 250)) {
+  // 血壓範圍驗證
+  // 收縮壓：休克可達 50-60，高血壓危象可超過 300
+  // 舒張壓：休克可低於 40，危象可達 180+
+  // 脈搏：運動員靜息 30+，劇烈運動 220+
+  if (data.systolic && (data.systolic < 50 || data.systolic > 300)) {
     data.systolic = null;
   }
-  if (data.diastolic && (data.diastolic < 40 || data.diastolic > 150)) {
+  if (data.diastolic && (data.diastolic < 30 || data.diastolic > 180)) {
     data.diastolic = null;
   }
-  if (data.pulse && (data.pulse < 40 || data.pulse > 200)) {
+  if (data.pulse && (data.pulse < 30 || data.pulse > 220)) {
     data.pulse = null;
   }
   return data;
@@ -329,11 +414,12 @@ function validateBloodPressure(data: BloodPressureData): BloodPressureData {
  * 驗證身高體重數據合理性
  */
 function validateBodyMeasurement(data: BodyMeasurementData): BodyMeasurementData {
-  // 身高體重範圍驗證 (身高 50-250cm, 體重 10-300kg)
-  if (data.height && (data.height < 50 || data.height > 250)) {
+  // 身高範圍驗證：侏儒症成人 ~60cm，最高紀錄 272cm，嬰兒 ~50cm
+  // 體重範圍驗證：早產兒 <1kg，最重紀錄 635kg
+  if (data.height && (data.height < 40 || data.height > 280)) {
     data.height = null;
   }
-  if (data.weight && (data.weight < 10 || data.weight > 300)) {
+  if (data.weight && (data.weight < 1 || data.weight > 650)) {
     data.weight = null;
   }
   return data;
@@ -344,16 +430,48 @@ function validateBodyMeasurement(data: BodyMeasurementData): BodyMeasurementData
  */
 function validateBloodGlucose(data: BloodGlucoseData): BloodGlucoseData {
   // 血糖範圍驗證
+  // 嚴重低血糖可達 20-30 mg/dL
+  // 糖尿病酮酸中毒可達 600-800+ mg/dL
   if (data.glucose && data.unit === 'mg/dL') {
-    // mg/dL 單位：一般範圍 40-400
-    if (data.glucose < 40 || data.glucose > 400) {
+    if (data.glucose < 20 || data.glucose > 800) {
       data.glucose = null;
     }
   } else if (data.glucose && data.unit === 'mmol/L') {
-    // mmol/L 單位：一般範圍 2.2-22.2 (相當於 40-400 mg/dL)
-    if (data.glucose < 2.2 || data.glucose > 22.2) {
+    // mmol/L 單位：對應 20-800 mg/dL
+    if (data.glucose < 1.1 || data.glucose > 44.4) {
       data.glucose = null;
     }
+  }
+  return data;
+}
+
+/**
+ * 驗證體脂肪率數據合理性
+ */
+function validateBodyFat(data: BodyFatData): BodyFatData {
+  // 體脂肪率範圍驗證
+  // 極低：健美選手比賽期可達 2-3%
+  // 極高：重度肥胖者可達 70% 以上
+  if (data.percentage && (data.percentage < 1 || data.percentage > 75)) {
+    data.percentage = null;
+  }
+  return data;
+}
+
+/**
+ * 驗證血氧濃度數據合理性
+ */
+function validateBloodOxygen(data: BloodOxygenData): BloodOxygenData {
+  // 血氧濃度範圍驗證
+  // 正常：95-100%
+  // 低於 90%：需要醫療關注
+  // 極端情況（重度呼吸疾病）：可能降到 50-60%
+  if (data.saturation && (data.saturation < 50 || data.saturation > 100)) {
+    data.saturation = null;
+  }
+  // 脈搏範圍驗證（一般範圍 30-220 bpm，考慮運動員靜息心率較低、劇烈運動較高）
+  if (data.pulse && (data.pulse < 30 || data.pulse > 220)) {
+    data.pulse = null;
   }
   return data;
 }
