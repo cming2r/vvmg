@@ -63,10 +63,35 @@ interface BloodGlucoseData {
   record_count: number;
 }
 
+interface BodyFatData {
+  latest?: {
+    percentage: number;
+    timestamp: string;
+  };
+  avg_7days?: number;
+  min_7days?: number;
+  max_7days?: number;
+  record_count: number;
+}
+
+interface BloodOxygenData {
+  latest?: {
+    saturation: number;
+    pulse?: number;
+    timestamp: string;
+  };
+  avg_7days?: number;
+  min_7days?: number;
+  max_7days?: number;
+  record_count: number;
+}
+
 interface HealthData {
   blood_pressure?: BloodPressureData;
   heart_rate?: HeartRateData;
   blood_glucose?: BloodGlucoseData;
+  body_fat?: BodyFatData;
+  blood_oxygen?: BloodOxygenData;
 }
 
 interface HealthSummaryRequest {
@@ -154,10 +179,12 @@ export async function POST(req: Request) {
     const hasBloodPressure = health_data.blood_pressure && health_data.blood_pressure.record_count > 0;
     const hasHeartRate = health_data.heart_rate && health_data.heart_rate.record_count > 0;
     const hasBloodGlucose = health_data.blood_glucose && health_data.blood_glucose.record_count > 0;
+    const hasBodyFat = health_data.body_fat && health_data.body_fat.record_count > 0;
+    const hasBloodOxygen = health_data.blood_oxygen && health_data.blood_oxygen.record_count > 0;
 
-    if (!hasBloodPressure && !hasHeartRate && !hasBloodGlucose) {
+    if (!hasBloodPressure && !hasHeartRate && !hasBloodGlucose && !hasBodyFat && !hasBloodOxygen) {
       return NextResponse.json(
-        { success: false, error: 'NO_ANALYZABLE_DATA', message: 'No blood pressure, heart rate, or blood glucose data provided' },
+        { success: false, error: 'NO_ANALYZABLE_DATA', message: 'No health data provided' },
         { status: 400, headers: corsHeaders }
       );
     }
@@ -175,6 +202,8 @@ export async function POST(req: Request) {
       hasBloodPressure && 'BP',
       hasHeartRate && 'HR',
       hasBloodGlucose && 'BG',
+      hasBodyFat && 'BF',
+      hasBloodOxygen && 'BO',
     ].filter(Boolean).join('+');
     console.log(`[External API v1] 健康摘要已生成 (${analyzedTypes})`);
 
@@ -226,6 +255,8 @@ async function generateHealthSummary(request: HealthSummaryRequest) {
     if (health_data.blood_pressure?.record_count) analyzedTypes.push('blood_pressure');
     if (health_data.heart_rate?.record_count) analyzedTypes.push('heart_rate');
     if (health_data.blood_glucose?.record_count) analyzedTypes.push('blood_glucose');
+    if (health_data.body_fat?.record_count) analyzedTypes.push('body_fat');
+    if (health_data.blood_oxygen?.record_count) analyzedTypes.push('blood_oxygen');
 
     return {
       success: true,
@@ -302,6 +333,38 @@ function buildHealthPrompt(
     dataDescriptions.push(bgDesc);
   }
 
+  if (healthData.body_fat?.record_count) {
+    const bf = healthData.body_fat;
+    let bfDesc = `### 體脂肪數據 (${bf.record_count} 筆紀錄)\n`;
+    if (bf.latest) {
+      bfDesc += `- 最新測量: ${bf.latest.percentage.toFixed(1)}% (${bf.latest.timestamp})\n`;
+    }
+    if (bf.avg_7days) {
+      bfDesc += `- 7日平均: ${bf.avg_7days.toFixed(1)}%\n`;
+    }
+    if (bf.min_7days !== undefined && bf.max_7days !== undefined) {
+      bfDesc += `- 7日範圍: ${bf.min_7days.toFixed(1)}% ~ ${bf.max_7days.toFixed(1)}%\n`;
+    }
+    dataDescriptions.push(bfDesc);
+  }
+
+  if (healthData.blood_oxygen?.record_count) {
+    const bo = healthData.blood_oxygen;
+    let boDesc = `### 血氧數據 (${bo.record_count} 筆紀錄)\n`;
+    if (bo.latest) {
+      boDesc += `- 最新測量: ${bo.latest.saturation.toFixed(0)}%`;
+      if (bo.latest.pulse) boDesc += `，脈搏 ${bo.latest.pulse.toFixed(0)} bpm`;
+      boDesc += ` (${bo.latest.timestamp})\n`;
+    }
+    if (bo.avg_7days) {
+      boDesc += `- 7日平均: ${bo.avg_7days.toFixed(1)}%\n`;
+    }
+    if (bo.min_7days !== undefined && bo.max_7days !== undefined) {
+      boDesc += `- 7日範圍: ${bo.min_7days.toFixed(0)}% ~ ${bo.max_7days.toFixed(0)}%\n`;
+    }
+    dataDescriptions.push(boDesc);
+  }
+
   const references = `
 ## 健康標準參考
 
@@ -326,7 +389,24 @@ function buildHealthPrompt(
 | 類型     | 正常    | 偏高      | 糖尿病   |
 |----------|---------|-----------|----------|
 | 空腹血糖 | < 100   | 100-125   | ≥ 126    |
-| 餐後血糖 | < 140   | 140-199   | ≥ 200    |`;
+| 餐後血糖 | < 140   | 140-199   | ≥ 200    |
+
+### 體脂肪標準 (%)
+| 等級     | 男性      | 女性      | level    |
+|----------|-----------|-----------|----------|
+| 過低     | < 6       | < 14      | elevated |
+| 運動員   | 6-13      | 14-20     | normal   |
+| 健康     | 14-17     | 21-24     | normal   |
+| 可接受   | 18-24     | 25-31     | elevated |
+| 過高     | > 25      | > 32      | high     |
+
+### 血氧標準 (SpO2 %)
+| 等級     | 範圍      | level    |
+|----------|-----------|----------|
+| 正常     | 95-100    | normal   |
+| 偏低     | 90-94     | elevated |
+| 低血氧   | < 90      | high     |
+| 嚴重低血氧 | < 85    | critical |`;
 
   return `你是一位專業的健康數據分析 AI。請根據以下健康數據提供綜合摘要。
 
