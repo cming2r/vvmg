@@ -473,37 +473,41 @@ function buildHealthPrompt(
 
   if (!hasHealthData && customNote) {
     // 只有補充說明，沒有健康數據
-    return `你是一位專業的健康諮詢 AI。用戶提供了健康相關的問題或描述，請根據以下資訊提供專業的健康建議。
+    return `你是一位專業的健康諮詢 AI。用戶提出了一個健康相關的問題，請針對性地回答。
 
 ## 用戶資料
 ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
 
-## 用戶問題/描述
+## 用戶問題
 ${customNote}
 ${references}
 
+## 重要原則
+1. **聚焦回答**：只回答用戶實際提出的問題，不要延伸到其他健康話題
+2. 若用戶問的是簡單的數據查詢（如「我的身高是否正常」），直接回答該問題即可
+3. 不要主動分析用戶沒有詢問的指標（如：用戶只問身高，不要主動分析 BMI、體重、運動量等）
+4. 只有當用戶明確詢問或描述症狀時，才提供相關的生活/飲食建議
+5. 若問題簡單明確，details 只需 1-2 項，lifestyle/dietary/warnings 可為空陣列
+
 ## 要求
 1. 使用 ${lang} 回覆
-2. 根據用戶描述的症狀或問題提供專業建議
-3. 評估可能的健康風險等級：normal（一般諮詢）、elevated（需注意）、high（建議就醫）、critical（緊急）
-4. 提供具體可行的生活提示
-5. 若描述的症狀可能需要就醫，在 warnings 中說明
-6. 顏色代碼：normal=#4CAF50, elevated=#FFA500, high=#FF5722, critical=#F44336
+2. 評估等級：normal（一般資訊）、elevated（需注意）、high（建議就醫）、critical（緊急）
+3. 顏色代碼：normal=#4CAF50, elevated=#FFA500, high=#FF5722, critical=#F44336
 
 ## 回覆格式（嚴格 JSON）
 {
   "status": {
     "level": "normal|elevated|high|critical",
-    "title": "健康建議標題",
-    "description": "針對用戶問題的評估說明",
+    "title": "簡潔的回答標題",
+    "description": "直接回答用戶的問題",
     "color": "#顏色代碼"
   },
   "summary": {
-    "overview": "簡短摘要（50字內）",
-    "details": ["詳細建議1", "詳細建議2", "..."],
-    "lifestyle": ["生活提示1", "生活提示2", "..."],
-    "dietary": ["飲食提示1", "飲食提示2", "..."],
-    "warnings": ["注意事項（若無則為空陣列）"],
+    "overview": "一句話回答用戶問題",
+    "details": ["針對問題的說明（1-3項即可）"],
+    "lifestyle": ["只在相關時提供，否則為空陣列"],
+    "dietary": ["只在相關時提供，否則為空陣列"],
+    "warnings": ["只在必要時提供，否則為空陣列"],
     "should_see_doctor": false
   }
 }
