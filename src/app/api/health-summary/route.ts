@@ -37,10 +37,6 @@ interface BloodPressureRecord {
 }
 
 interface BloodPressureData {
-  avg_systolic?: number;
-  avg_diastolic?: number;
-  min_systolic?: number;
-  max_systolic?: number;
   record_count: number;
   recent_records?: BloodPressureRecord[];
 }
@@ -51,9 +47,6 @@ interface HeartRateRecord {
 }
 
 interface HeartRateData {
-  avg?: number;
-  min?: number;
-  max?: number;
   record_count: number;
   recent_records?: HeartRateRecord[];
 }
@@ -65,7 +58,6 @@ interface BloodGlucoseRecord {
 }
 
 interface BloodGlucoseData {
-  avg?: number;
   record_count: number;
   recent_records?: BloodGlucoseRecord[];
 }
@@ -76,9 +68,6 @@ interface BodyFatRecord {
 }
 
 interface BodyFatData {
-  avg?: number;
-  min?: number;
-  max?: number;
   record_count: number;
   recent_records?: BodyFatRecord[];
 }
@@ -90,9 +79,6 @@ interface BloodOxygenRecord {
 }
 
 interface BloodOxygenData {
-  avg?: number;
-  min?: number;
-  max?: number;
   record_count: number;
   recent_records?: BloodOxygenRecord[];
 }
@@ -108,6 +94,7 @@ interface HealthData {
 interface HealthSummaryRequest {
   device_id: string;
   language: string;
+  country_code?: string;
   user_profile?: UserProfile;
   health_data: HealthData;
   custom_note?: string;
@@ -123,10 +110,7 @@ interface SummaryResult {
     items: string[];
     source: string;
   };
-  next_steps: {
-    title: string;
-    items: string[];
-  };
+  critical_alert?: string;  // 危急值警告 - 平時 null，只有危急時才填充
 }
 
 // ===== API Routes =====
@@ -205,21 +189,14 @@ export async function POST(req: Request) {
     const result = await generateHealthSummary({
       device_id,
       language: language || 'zh-TW',
+      country_code: country_code || 'TW',
       user_profile,
       health_data,
       custom_note,
     });
 
-    // Log 請求資訊
-    const analyzedTypes = [
-      hasBloodPressure && 'blood_pressure',
-      hasHeartRate && 'heart_rate',
-      hasBloodGlucose && 'blood_glucose',
-      hasBodyFat && 'body_fat',
-      hasBloodOxygen && 'blood_oxygen',
-    ].filter(Boolean) as string[];
-
     // 記錄到 Supabase
+    const mode = hasCustomNote ? 'asking' : 'summary';
     try {
       await logHealthSummary({
         // 輸入
@@ -235,10 +212,10 @@ export async function POST(req: Request) {
         country_code: country_code || null,
         client_info: client_info || null,
       });
-      console.log(`[External API v1] 健康摘要已生成並記錄 (${analyzedTypes.join('+')})`);
+      console.log(`[External API] (${mode}) 已生成並記錄`);
     } catch (logError) {
       // 記錄錯誤但不影響主流程回應
-      console.error('[External API v1] 健康摘要記錄保存失敗:', logError);
+      console.error('[External API] 健康摘要記錄保存失敗:', logError);
     }
 
     // 6. 返回結果
@@ -271,10 +248,10 @@ export async function POST(req: Request) {
 // ===== 業務邏輯 =====
 
 async function generateHealthSummary(request: HealthSummaryRequest) {
-  const { language, user_profile, health_data, custom_note } = request;
+  const { language, country_code, user_profile, health_data, custom_note } = request;
 
   try {
-    const prompt = buildHealthPrompt(language, user_profile, health_data, custom_note);
+    const prompt = buildHealthPrompt(language, country_code, user_profile, health_data, custom_note);
 
     const { text } = await generateText({
       model: 'google/gemini-3-flash',
@@ -317,27 +294,27 @@ async function generateHealthSummary(request: HealthSummaryRequest) {
 
 function buildHealthPrompt(
   language: string,
+  countryCode: string | undefined,
   userProfile: UserProfile | undefined,
   healthData: HealthData | undefined,
   customNote?: string
 ): string {
   const lang = language === 'zh-TW' ? '繁體中文' : 'English';
 
-  // 動態生成數據描述（包含統計和每筆紀錄）
+  // 判斷是否為亞洲地區（使用亞洲 BMI 標準）
+  const asianCountries = ['TW', 'HK', 'JP', 'KR', 'SG', 'CN', 'MY', 'TH', 'VN', 'PH', 'ID', 'MO'];
+  const isAsianRegion = asianCountries.includes(countryCode || 'TW');
+  const bmiStandardNote = isAsianRegion
+    ? '用戶來自亞洲地區，BMI 評估請使用 WHO 亞洲標準（正常：18.5-22.9，過重：≥23，肥胖：≥25）'
+    : '用戶來自非亞洲地區，BMI 評估請使用 WHO 全球標準（正常：18.5-24.9，過重：≥25，肥胖：≥30）';
+
+  // 動態生成數據描述（每筆紀錄）
   const dataDescriptions: string[] = [];
 
   if (healthData?.blood_pressure?.record_count) {
     const bp = healthData.blood_pressure;
     let bpDesc = `### 血壓數據 (${bp.record_count} 筆紀錄)\n`;
-    bpDesc += `**統計摘要:**\n`;
-    if (bp.avg_systolic) {
-      bpDesc += `- 平均: ${bp.avg_systolic.toFixed(0)}/${bp.avg_diastolic?.toFixed(0)} mmHg\n`;
-    }
-    if (bp.min_systolic && bp.max_systolic) {
-      bpDesc += `- 收縮壓範圍: ${bp.min_systolic} ~ ${bp.max_systolic} mmHg\n`;
-    }
     if (bp.recent_records && bp.recent_records.length > 0) {
-      bpDesc += `\n**最近紀錄（從新到舊）:**\n`;
       bp.recent_records.forEach((r, i) => {
         bpDesc += `${i + 1}. ${r.systolic}/${r.diastolic} mmHg`;
         if (r.pulse) bpDesc += `，脈搏 ${r.pulse} bpm`;
@@ -350,15 +327,7 @@ function buildHealthPrompt(
   if (healthData?.heart_rate?.record_count) {
     const hr = healthData.heart_rate;
     let hrDesc = `### 心率數據 (${hr.record_count} 筆紀錄)\n`;
-    hrDesc += `**統計摘要:**\n`;
-    if (hr.avg) {
-      hrDesc += `- 平均: ${hr.avg.toFixed(0)} bpm\n`;
-    }
-    if (hr.min && hr.max) {
-      hrDesc += `- 範圍: ${hr.min} ~ ${hr.max} bpm\n`;
-    }
     if (hr.recent_records && hr.recent_records.length > 0) {
-      hrDesc += `\n**最近紀錄（從新到舊）:**\n`;
       hr.recent_records.forEach((r, i) => {
         hrDesc += `${i + 1}. ${r.value} bpm (${r.timestamp})\n`;
       });
@@ -369,12 +338,7 @@ function buildHealthPrompt(
   if (healthData?.blood_glucose?.record_count) {
     const bg = healthData.blood_glucose;
     let bgDesc = `### 血糖數據 (${bg.record_count} 筆紀錄)\n`;
-    bgDesc += `**統計摘要:**\n`;
-    if (bg.avg) {
-      bgDesc += `- 平均: ${bg.avg.toFixed(0)} mg/dL\n`;
-    }
     if (bg.recent_records && bg.recent_records.length > 0) {
-      bgDesc += `\n**最近紀錄（從新到舊）:**\n`;
       bg.recent_records.forEach((r, i) => {
         const typeLabel = r.type === 'fasting' ? '空腹' :
                           r.type === 'postprandial' ? '餐後' :
@@ -388,15 +352,7 @@ function buildHealthPrompt(
   if (healthData?.body_fat?.record_count) {
     const bf = healthData.body_fat;
     let bfDesc = `### 體脂肪數據 (${bf.record_count} 筆紀錄)\n`;
-    bfDesc += `**統計摘要:**\n`;
-    if (bf.avg) {
-      bfDesc += `- 平均: ${bf.avg.toFixed(1)}%\n`;
-    }
-    if (bf.min !== undefined && bf.max !== undefined) {
-      bfDesc += `- 範圍: ${bf.min.toFixed(1)}% ~ ${bf.max.toFixed(1)}%\n`;
-    }
     if (bf.recent_records && bf.recent_records.length > 0) {
-      bfDesc += `\n**最近紀錄（從新到舊）:**\n`;
       bf.recent_records.forEach((r, i) => {
         bfDesc += `${i + 1}. ${r.percentage.toFixed(1)}% (${r.timestamp})\n`;
       });
@@ -407,15 +363,7 @@ function buildHealthPrompt(
   if (healthData?.blood_oxygen?.record_count) {
     const bo = healthData.blood_oxygen;
     let boDesc = `### 血氧數據 (${bo.record_count} 筆紀錄)\n`;
-    boDesc += `**統計摘要:**\n`;
-    if (bo.avg) {
-      boDesc += `- 平均: ${bo.avg.toFixed(1)}%\n`;
-    }
-    if (bo.min !== undefined && bo.max !== undefined) {
-      boDesc += `- 範圍: ${bo.min.toFixed(0)}% ~ ${bo.max.toFixed(0)}%\n`;
-    }
     if (bo.recent_records && bo.recent_records.length > 0) {
-      boDesc += `\n**最近紀錄（從新到舊）:**\n`;
       bo.recent_records.forEach((r, i) => {
         boDesc += `${i + 1}. ${r.saturation.toFixed(0)}%`;
         if (r.pulse) boDesc += `，脈搏 ${r.pulse.toFixed(0)} bpm`;
@@ -468,15 +416,23 @@ function buildHealthPrompt(
 | 低血氧   | < 90      | high     |
 | 嚴重低血氧 | < 85    | critical |`;
 
-  // 用戶補充說明
-  const customNoteSection = customNote
-    ? `\n## 用戶補充說明\n${customNote}\n`
-    : '';
-
   // 根據是否有健康數據調整提示詞
   const hasHealthData = dataDescriptions.length > 0;
 
-  const outputFormat = `
+  // 危急值判斷規則
+  const criticalAlertRule = `
+## 危急值警告規則
+若偵測到以下任一情況，必須在 JSON 中加入 "critical_alert" 欄位：
+- 收縮壓 > 180 mmHg 或舒張壓 > 120 mmHg（高血壓危象）
+- 血氧 SpO2 < 90%（低血氧）
+- 空腹血糖 > 400 mg/dL 或 < 50 mg/dL（血糖危急值）
+- 心率 > 150 bpm 或 < 40 bpm（心律異常）
+
+critical_alert 內容範例：「偵測到危急數值，請立即聯繫您的醫師或前往急診就醫。」
+若無危急情況，則不要包含此欄位。`;
+
+  // Summary 模式的回覆格式
+  const outputFormatSummary = `
 ## 回覆格式（嚴格 JSON）
 {
   "data_recap": {
@@ -486,19 +442,62 @@ function buildHealthPrompt(
   "reference_standards": {
     "title": "參考標準",
     "items": ["根據○○指引，標準範圍為...", "..."],
-    "source": "資料來源（如：衛生福利部國民健康署、WHO、AHA 等）"
+    "source": "資料來源（如：WHO、AHA、ADA 等）"
   },
-  "next_steps": {
-    "title": "下一步建議",
-    "items": ["建議將此摘要提供給您的醫師參考", "..."]
-  }
+  "critical_alert": "（僅在危急值時才加入此欄位）"
 }
-
+${criticalAlertRule}
 只輸出 JSON，不要其他文字。`;
 
-  if (!hasHealthData && customNote) {
-    // 只有補充說明，沒有健康數據
-    return `你是一位健康衛教 AI 助手。用戶提出了健康相關問題，請以衛教角度回答。
+  // Asking 模式的回覆格式
+  const outputFormatAsking = `
+## 回覆格式（嚴格 JSON）
+{
+  "data_recap": {
+    "title": "您的問題",
+    "items": ["問題摘要或相關資訊"]
+  },
+  "reference_standards": {
+    "title": "參考資訊",
+    "items": ["根據○○指引...", "..."],
+    "source": "資料來源（如：WHO、AHA、ADA 等）"
+  },
+  "critical_alert": "（僅在危急值時才加入此欄位）"
+}
+${criticalAlertRule}
+只輸出 JSON，不要其他文字。`;
+
+  // ===== Asking 模式（有問題）=====
+  if (customNote) {
+    if (hasHealthData) {
+      // Asking 模式 + 有健康數據作為輔助
+      return `你是一位健康衛教 AI 助手。用戶提出了健康相關問題，並提供了個人健康數據作為參考。請結合數據回答問題。
+
+## 用戶資料
+${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
+
+## 用戶問題
+${customNote}
+
+## 用戶健康數據（最近 30 天內，作為參考）
+${dataDescriptions.join('\n')}
+${references}
+
+## 重要原則（法律安全）
+1. **不做診斷**：絕對不能說「你有○○症」、「你過重」、「你的血壓偏高」等診斷性用語
+2. **只陳述事實**：例如「您的 BMI 計算結果為 25.3」，不說「您過重」
+3. **引用官方標準**：提供參考範圍時，務必註明來源（WHO、AHA、ADA 等國際標準）
+4. **聚焦回答**：針對用戶的問題回答，結合提供的健康數據
+5. **BMI 標準**：${bmiStandardNote}
+
+## 要求
+1. 使用 ${lang} 回覆
+2. data_recap：整理與問題相關的數據（純客觀陳述）
+3. reference_standards：引用官方標準回答問題，讓用戶自行參考
+${outputFormatAsking}`;
+    } else {
+      // Asking 模式，沒有健康數據
+      return `你是一位健康衛教 AI 助手。用戶提出了健康相關問題，請以衛教角度回答。
 
 ## 用戶資料
 ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
@@ -510,41 +509,53 @@ ${references}
 ## 重要原則（法律安全）
 1. **不做診斷**：絕對不能說「你有○○症」、「你過重」、「你的血壓偏高」等診斷性用語
 2. **只陳述事實**：例如「您的 BMI 計算結果為 25.3」，不說「您過重」
-3. **引用官方標準**：提供參考範圍時，務必註明來源（WHO、衛福部、AHA 等）
-4. **永遠導向專業**：next_steps 必須包含「建議諮詢醫師/營養師/專業人員」
-5. **聚焦回答**：只回答用戶實際提出的問題，不延伸到其他話題
+3. **引用官方標準**：提供參考範圍時，務必註明來源（WHO、AHA、ADA 等國際標準）
+4. **聚焦回答**：只回答用戶實際提出的問題，不延伸到其他話題
+5. **BMI 標準**：${bmiStandardNote}
 
 ## 要求
 1. 使用 ${lang} 回覆
-2. data_recap：整理用戶提供的數據（純客觀陳述）
-3. reference_standards：引用官方標準，讓用戶自行比對
-4. next_steps：永遠指向專業人士
-${outputFormat}`;
+2. data_recap：整理用戶提問的重點
+3. reference_standards：引用官方標準回答問題，讓用戶自行參考
+${outputFormatAsking}`;
+    }
   }
 
-  return `你是一位健康衛教 AI 助手。請根據以下健康數據提供衛教資訊。
+  // ===== Summary 模式（只分析健康數據）=====
+  return `你是一位健康衛教 AI 助手。請根據以下健康數據提供具有洞察力的衛教摘要。
 
 ## 用戶資料
 ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
-${customNoteSection}
+
 ## 健康數據（最近 30 天內的紀錄）
 ${dataDescriptions.join('\n')}
 ${references}
 
+## 分析指令（產出更有價值的摘要）
+1. **趨勢分析**：計算數據的平均值與區間，指出是否有明顯波動
+2. **標準比對**：直接陳述數據落在參考標準的哪個級別（例如：「屬於高血壓第一期範圍」），但不做疾病診斷
+3. **綜合觀察**：結合用戶的 BMI、運動量、飲酒習慣等，提供整體的衛教觀察
+4. **異常點標註**：若有任何單次數值達到危急等級，請特別標註
+
 ## 重要原則（法律安全）
-1. **不做診斷**：絕對不能說「你有高血壓」、「你過重」、「你的血糖偏高」等診斷性用語
-2. **只陳述事實**：例如「您的平均收縮壓為 135 mmHg」，不說「您血壓偏高」
-3. **引用官方標準**：提供參考範圍時，務必註明來源（WHO、衛福部、AHA 等）
-4. **永遠導向專業**：next_steps 必須包含「建議將此摘要提供給您的醫師參考」
-5. **不給具體建議**：不說「你應該少吃鹽」，改說「如需飲食建議，請諮詢營養師」
-6. **說明時效性**：在 data_recap 中註明這些是「最近 30 天內」的紀錄
+1. **不做診斷**：絕對不能說「你有高血壓」、「你過重」，改說「屬於○○範圍」
+2. **只陳述事實**：例如「平均血壓 138/82 mmHg，有 2 次落在高血壓第一期範圍」
+3. **引用官方標準**：提供參考範圍時，務必註明來源（WHO、AHA、ADA 等國際標準）
+4. **不給具體建議**：不說「你應該少吃鹽」，改說「如需飲食建議，請諮詢營養師」
+5. **BMI 標準**：${bmiStandardNote}
+
+## data_recap 輸出範例
+- 「過去 30 天內，平均血壓為 138/82 mmHg，共有 2 次紀錄落在『高血壓第一期』範圍」
+- 「BMI 為 25.3，根據 WHO 亞洲標準，屬於肥胖（Obese）範圍」
+- 「血氧飽和度穩定維持在 99%，處於正常範圍」
+- 「活動量為『不足』，且 BMI 屬於肥胖範圍，建議與醫師討論運動計畫」
+- 「飲酒頻率為每月 2-4 次，需注意酒精攝取對血壓的潛在影響」
 
 ## 要求
 1. 使用 ${lang} 回覆
-2. data_recap：整理用戶上傳的數值（含計算值如 BMI），純客觀陳述
-3. reference_standards：引用官方健康標準，讓用戶自行比對，務必註明來源
-4. next_steps：永遠指向專業人士（醫師、營養師等）
-${outputFormat}`;
+2. data_recap：整理用戶數據，包含平均值、趨勢、標準分類、生活習慣關聯
+3. reference_standards：引用官方健康標準，讓用戶自行比對
+${outputFormatSummary}`;
 }
 
 function parseHealthSummaryResponse(text: string): SummaryResult {
@@ -555,7 +566,7 @@ function parseHealthSummaryResponse(text: string): SummaryResult {
       const jsonStr = jsonMatch[1] || jsonMatch[0];
       const parsed = JSON.parse(jsonStr);
 
-      return {
+      const result: SummaryResult = {
         data_recap: {
           title: parsed.data_recap?.title || '您提供的數據',
           items: parsed.data_recap?.items || [],
@@ -565,19 +576,27 @@ function parseHealthSummaryResponse(text: string): SummaryResult {
           items: parsed.reference_standards?.items || [],
           source: parsed.reference_standards?.source || '',
         },
-        next_steps: {
-          title: parsed.next_steps?.title || '下一步建議',
-          items: parsed.next_steps?.items || ['建議諮詢專業醫療人員'],
-        },
       };
+
+      // 危急值警告（只在 AI 有返回時才包含）
+      if (parsed.critical_alert && typeof parsed.critical_alert === 'string' && parsed.critical_alert.trim()) {
+        result.critical_alert = parsed.critical_alert.trim();
+      }
+
+      return result;
     }
 
     const parsed = JSON.parse(text);
-    return {
+    const result: SummaryResult = {
       data_recap: parsed.data_recap,
       reference_standards: parsed.reference_standards,
-      next_steps: parsed.next_steps,
     };
+
+    if (parsed.critical_alert && typeof parsed.critical_alert === 'string' && parsed.critical_alert.trim()) {
+      result.critical_alert = parsed.critical_alert.trim();
+    }
+
+    return result;
 
   } catch (parseError) {
     console.error('解析健康摘要回應失敗:', parseError);
@@ -591,10 +610,7 @@ function parseHealthSummaryResponse(text: string): SummaryResult {
         items: [],
         source: '',
       },
-      next_steps: {
-        title: '下一步建議',
-        items: ['如有健康疑慮，請諮詢專業醫療人員'],
-      },
+      // 錯誤情況不包含 critical_alert，前端會顯示固定免責聲明
     };
   }
 }
@@ -621,14 +637,14 @@ function getOfficialSource(language: string, analyzedTypes: string[]): string {
     sources.push(language === 'zh-TW' ? '世界衛生組織 (WHO)' : 'World Health Organization (WHO)');
   }
   if (analyzedTypes.includes('custom_note')) {
-    sources.push(language === 'zh-TW' ? '衛生福利部國民健康署' : 'Health Promotion Administration, Ministry of Health and Welfare');
+    sources.push(language === 'zh-TW' ? '世界衛生組織 (WHO)' : 'World Health Organization (WHO)');
   }
 
   // 去重
   const uniqueSources = [...new Set(sources)];
 
   if (uniqueSources.length === 0) {
-    return language === 'zh-TW' ? '衛生福利部國民健康署' : 'Health Promotion Administration';
+    return language === 'zh-TW' ? '世界衛生組織 (WHO)' : 'World Health Organization (WHO)';
   }
 
   return uniqueSources.join('、');
