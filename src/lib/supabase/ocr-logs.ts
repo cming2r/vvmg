@@ -55,7 +55,7 @@ export interface HealthSummaryLog {
 export async function logHealthSummary(log: HealthSummaryLog) {
   try {
     const { data, error } = await supabase
-      .from('pichealth_summary')
+      .from('health_summary')
       .insert({
         health_data: log.health_data || null,
         user_profile: log.user_profile || null,
