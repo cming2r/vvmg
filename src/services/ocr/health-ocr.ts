@@ -7,12 +7,13 @@ export interface BloodPressureData {
   pulse: number | null;
 }
 
-// 身高體重數據介面
+// 身高體重數據介面（智能體重秤可能同時包含體脂肪）
 export interface BodyMeasurementData {
   height: number | null;
   heightUnit: 'cm' | 'ft' | 'in' | null;  // 身高單位
   weight: number | null;
   weightUnit: 'kg' | 'lbs' | null;        // 體重單位
+  bodyFatPercentage: number | null;       // 體脂肪率 %（智能體重秤）
 }
 
 // 血糖數據介面
@@ -69,10 +70,12 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
 
 支援的設備類型：
 1. **血壓計** - 顯示收縮壓(SYS)、舒張壓(DIA)、脈搏(PULSE)
-2. **身高體重計** - 顯示身高(cm)、體重(kg)
+2. **身高體重計/智能體重秤** - 顯示身高(cm)、體重(kg)，智能體重秤可能同時顯示體脂肪率(%)
 3. **血糖計** - 顯示血糖值（mg/dL 或 mmol/L）
-4. **體脂計** - 顯示體脂肪率（%）
+4. **體脂計** - 僅顯示體脂肪率（%），不顯示體重
 5. **血氧機/脈搏血氧儀** - 顯示血氧濃度(SpO2)和脈搏
+
+**重要判斷**：如果設備同時顯示體重和體脂肪率，請識別為 body_measurement（智能體重秤），而非 body_fat。
 
 識別指示：
 1. 首先判斷設備類型
@@ -116,19 +119,21 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
   "time": "09:30"
 }
 
-**如果是身高體重計：**
+**如果是身高體重計/智能體重秤：**
 {
   "deviceType": "body_measurement",
   "bodyMeasurement": {
     "height": 170.5,
     "heightUnit": "cm",
     "weight": 65.2,
-    "weightUnit": "kg"
+    "weightUnit": "kg",
+    "bodyFatPercentage": 24.5
   },
   "year": "2024",
   "monthday": "01-15",
   "time": "09:30"
 }
+（注意：height、bodyFatPercentage 為可選欄位，如果設備只顯示體重則不填）
 
 **如果是血糖計：**
 {
@@ -183,6 +188,9 @@ export async function processHealthOCR(imageBase64: string): Promise<HealthOCRRe
 
 - 體重計顯示 "Height 5.7 ft Weight 154 lbs"（無日期）
   → {"deviceType": "body_measurement", "bodyMeasurement": {"height": 5.7, "heightUnit": "ft", "weight": 154, "weightUnit": "lbs"}}
+
+- 智能體重秤顯示 "77.50 kg  24.7%"（體重+體脂肪）
+  → {"deviceType": "body_measurement", "bodyMeasurement": {"weight": 77.5, "weightUnit": "kg", "bodyFatPercentage": 24.7}}
 
 - 血糖計顯示 "95 mg/dL 2024-01-15 08:45 PM" 或 "空腹血糖 95 2024/01/15 20:45"
   → {"deviceType": "blood_glucose", "bloodGlucose": {"glucose": 95, "unit": "mg/dL", "measurementType": "fasting"}, "year": "2024", "monthday": "01-15", "time": "20:45"}
@@ -261,6 +269,7 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
           heightUnit: parsed.bodyMeasurement.heightUnit || null,
           weight: parsed.bodyMeasurement.weight || null,
           weightUnit: parsed.bodyMeasurement.weightUnit || null,
+          bodyFatPercentage: parsed.bodyMeasurement.bodyFatPercentage || null,
         };
       } else if (deviceType === 'blood_glucose' && parsed.bloodGlucose) {
         bloodGlucose = {
@@ -298,6 +307,7 @@ function parseHealthOCRResponse(text: string): HealthOCRResult {
           heightUnit: parsed.bodyMeasurement.heightUnit || null,
           weight: parsed.bodyMeasurement.weight || null,
           weightUnit: parsed.bodyMeasurement.weightUnit || null,
+          bodyFatPercentage: parsed.bodyMeasurement.bodyFatPercentage || null,
         };
       } else if (deviceType === 'blood_glucose' && parsed.bloodGlucose) {
         bloodGlucose = {

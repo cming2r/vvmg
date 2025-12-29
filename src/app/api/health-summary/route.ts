@@ -110,6 +110,13 @@ interface SummaryResult {
     items: string[];
     source: string;
   };
+  practical_tips?: {  // Asking 模式專用 - 實用建議
+    title: string;
+    benefits?: string[];      // 好處/優點
+    precautions?: string[];   // 注意事項/缺點
+    suggestions?: string[];   // 具體建議（飲用方式、時間等）
+    unsuitable_for?: string[]; // 不適合的族群
+  };
   critical_alert?: string;  // 危急值警告 - 平時 null，只有危急時才填充
 }
 
@@ -272,9 +279,13 @@ async function generateHealthSummary(request: HealthSummaryRequest) {
       analyzedTypes.push('custom_note');
     }
 
-    // 覆寫 source 為固定來源（避免 AI 幻覺）
-    const officialSource = getOfficialSource(language, analyzedTypes);
-    jsonResponse.reference_standards.source = officialSource;
+    // Summary 模式：覆寫 source 為固定來源（避免 AI 幻覺）
+    // Asking 模式：讓 AI 自行決定來源（因為問題範圍廣泛）
+    const isAskingMode = custom_note && custom_note.trim().length > 0;
+    if (!isAskingMode) {
+      const officialSource = getOfficialSource(language, analyzedTypes);
+      jsonResponse.reference_standards.source = officialSource;
+    }
 
     return {
       success: true,
@@ -455,15 +466,33 @@ ${criticalAlertRule}
 {
   "data_recap": {
     "title": "您的問題",
-    "items": ["問題摘要或相關資訊"]
+    "items": ["問題摘要或重點整理"]
   },
   "reference_standards": {
-    "title": "參考資訊",
-    "items": ["根據○○指引...", "..."],
-    "source": "資料來源（如：WHO、AHA、ADA 等）"
+    "title": "健康參考資訊",
+    "items": ["相關的健康知識或研究結果..."],
+    "source": "資料來源（如有明確來源則填寫，否則可填『一般健康知識』）"
   },
-  "critical_alert": "（僅在危急值時才加入此欄位）"
+  "practical_tips": {
+    "title": "實用建議",
+    "benefits": ["好處1", "好處2"],
+    "precautions": ["注意事項1", "注意事項2"],
+    "suggestions": ["具體建議1（如：時間、方式、份量等）"],
+    "unsuitable_for": ["不適合的族群1", "不適合的族群2"]
+  },
+  "critical_alert": "（僅在涉及危急健康狀況時才加入此欄位）"
 }
+
+## 欄位說明
+- data_recap：整理用戶問題的重點
+- reference_standards：提供相關的健康知識背景（不需要每條都引用官方標準，一般健康知識也可以）
+- practical_tips：最重要！提供實用、可執行的建議
+  - benefits：這樣做的好處（2-4 項）
+  - precautions：需要注意的事項或潛在缺點（2-4 項）
+  - suggestions：具體的執行建議（時間、份量、方式等，1-3 項）
+  - unsuitable_for：哪些人不適合（1-4 項，如沒有則可省略此欄位）
+- critical_alert：只有危急情況才加入
+
 ${criticalAlertRule}
 只輸出 JSON，不要其他文字。`;
 
@@ -471,7 +500,7 @@ ${criticalAlertRule}
   if (customNote) {
     if (hasHealthData) {
       // Asking 模式 + 有健康數據作為輔助
-      return `你是一位健康衛教 AI 助手。用戶提出了健康相關問題，並提供了個人健康數據作為參考。請結合數據回答問題。
+      return `你是一位親切、專業的健康顧問。用戶提出了健康相關問題，並提供了個人健康數據作為參考。請像朋友一樣給出實用的回答。
 
 ## 用戶資料
 ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
@@ -483,40 +512,52 @@ ${customNote}
 ${dataDescriptions.join('\n')}
 ${references}
 
-## 重要原則（法律安全）
-1. **不做診斷**：絕對不能說「你有○○症」、「你過重」、「你的血壓偏高」等診斷性用語
-2. **只陳述事實**：例如「您的 BMI 計算結果為 25.3」，不說「您過重」
-3. **引用官方標準**：提供參考範圍時，務必註明來源（WHO、AHA、ADA 等國際標準）
-4. **聚焦回答**：針對用戶的問題回答，結合提供的健康數據
-5. **BMI 標準**：${bmiStandardNote}
+## 回答原則
+1. **實用優先**：給出具體、可執行的建議（時間、份量、方式等）
+2. **優缺點並陳**：說明好處，也提醒注意事項
+3. **考量個人狀況**：結合用戶提供的健康數據給出更個人化的建議
+4. **標註不適合族群**：明確指出哪些人不適合（如糖尿病患者、孕婦等）
+5. **友善語氣**：像朋友給建議一樣自然，不要太生硬
+6. **BMI 標準**：${bmiStandardNote}
+
+## 安全底線
+- 不做醫療診斷（不說「你有○○病」）
+- 涉及嚴重疾病時提醒就醫
+- 在 practical_tips 最後一條 suggestions 加上「如有特殊疾病或疑慮，建議諮詢醫師」
 
 ## 要求
 1. 使用 ${lang} 回覆
-2. data_recap：整理與問題相關的數據（純客觀陳述）
-3. reference_standards：引用官方標準回答問題，讓用戶自行參考
+2. data_recap：簡要整理問題重點
+3. reference_standards：提供相關健康知識背景（1-3 條即可，不用太多）
+4. practical_tips：**重點！** 提供實用建議，包含好處、注意事項、具體做法、不適合族群
 ${outputFormatAsking}`;
     } else {
       // Asking 模式，沒有健康數據
-      return `你是一位健康衛教 AI 助手。用戶提出了健康相關問題，請以衛教角度回答。
+      return `你是一位親切、專業的健康顧問。用戶提出了健康相關問題，請像朋友一樣給出實用的回答。
 
 ## 用戶資料
 ${userProfile ? JSON.stringify(userProfile, null, 2) : '未提供'}
 
 ## 用戶問題
 ${customNote}
-${references}
 
-## 重要原則（法律安全）
-1. **不做診斷**：絕對不能說「你有○○症」、「你過重」、「你的血壓偏高」等診斷性用語
-2. **只陳述事實**：例如「您的 BMI 計算結果為 25.3」，不說「您過重」
-3. **引用官方標準**：提供參考範圍時，務必註明來源（WHO、AHA、ADA 等國際標準）
-4. **聚焦回答**：只回答用戶實際提出的問題，不延伸到其他話題
+## 回答原則
+1. **實用優先**：給出具體、可執行的建議（時間、份量、方式等）
+2. **優缺點並陳**：說明好處，也提醒注意事項
+3. **標註不適合族群**：明確指出哪些人不適合（如糖尿病患者、孕婦等）
+4. **友善語氣**：像朋友給建議一樣自然，不要太生硬
 5. **BMI 標準**：${bmiStandardNote}
+
+## 安全底線
+- 不做醫療診斷（不說「你有○○病」）
+- 涉及嚴重疾病時提醒就醫
+- 在 practical_tips 最後一條 suggestions 加上「如有特殊疾病或疑慮，建議諮詢醫師」
 
 ## 要求
 1. 使用 ${lang} 回覆
-2. data_recap：整理用戶提問的重點
-3. reference_standards：引用官方標準回答問題，讓用戶自行參考
+2. data_recap：簡要整理問題重點（1-2 條）
+3. reference_standards：提供相關健康知識背景（1-3 條即可，不用太多）
+4. practical_tips：**重點！** 提供實用建議，包含好處、注意事項、具體做法、不適合族群
 ${outputFormatAsking}`;
     }
   }
@@ -578,6 +619,17 @@ function parseHealthSummaryResponse(text: string): SummaryResult {
         },
       };
 
+      // practical_tips（Asking 模式專用）
+      if (parsed.practical_tips && typeof parsed.practical_tips === 'object') {
+        result.practical_tips = {
+          title: parsed.practical_tips.title || '實用建議',
+          benefits: Array.isArray(parsed.practical_tips.benefits) ? parsed.practical_tips.benefits : undefined,
+          precautions: Array.isArray(parsed.practical_tips.precautions) ? parsed.practical_tips.precautions : undefined,
+          suggestions: Array.isArray(parsed.practical_tips.suggestions) ? parsed.practical_tips.suggestions : undefined,
+          unsuitable_for: Array.isArray(parsed.practical_tips.unsuitable_for) ? parsed.practical_tips.unsuitable_for : undefined,
+        };
+      }
+
       // 危急值警告（只在 AI 有返回時才包含）
       if (parsed.critical_alert && typeof parsed.critical_alert === 'string' && parsed.critical_alert.trim()) {
         result.critical_alert = parsed.critical_alert.trim();
@@ -591,6 +643,17 @@ function parseHealthSummaryResponse(text: string): SummaryResult {
       data_recap: parsed.data_recap,
       reference_standards: parsed.reference_standards,
     };
+
+    // practical_tips（Asking 模式專用）
+    if (parsed.practical_tips && typeof parsed.practical_tips === 'object') {
+      result.practical_tips = {
+        title: parsed.practical_tips.title || '實用建議',
+        benefits: Array.isArray(parsed.practical_tips.benefits) ? parsed.practical_tips.benefits : undefined,
+        precautions: Array.isArray(parsed.practical_tips.precautions) ? parsed.practical_tips.precautions : undefined,
+        suggestions: Array.isArray(parsed.practical_tips.suggestions) ? parsed.practical_tips.suggestions : undefined,
+        unsuitable_for: Array.isArray(parsed.practical_tips.unsuitable_for) ? parsed.practical_tips.unsuitable_for : undefined,
+      };
+    }
 
     if (parsed.critical_alert && typeof parsed.critical_alert === 'string' && parsed.critical_alert.trim()) {
       result.critical_alert = parsed.critical_alert.trim();
@@ -610,7 +673,7 @@ function parseHealthSummaryResponse(text: string): SummaryResult {
         items: [],
         source: '',
       },
-      // 錯誤情況不包含 critical_alert，前端會顯示固定免責聲明
+      // 錯誤情況不包含 critical_alert 和 practical_tips，前端會顯示固定免責聲明
     };
   }
 }
@@ -634,9 +697,6 @@ function getOfficialSource(language: string, analyzedTypes: string[]): string {
     sources.push(language === 'zh-TW' ? '美國運動醫學會 (ACSM)' : 'American College of Sports Medicine (ACSM)');
   }
   if (analyzedTypes.includes('blood_oxygen')) {
-    sources.push(language === 'zh-TW' ? '世界衛生組織 (WHO)' : 'World Health Organization (WHO)');
-  }
-  if (analyzedTypes.includes('custom_note')) {
     sources.push(language === 'zh-TW' ? '世界衛生組織 (WHO)' : 'World Health Organization (WHO)');
   }
 
