@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { processHealthOCR, HealthOCRResult } from '@/services/ocr/health-ocr';
 import { validateApiKey, isRateLimited, getRateLimitInfo, getCorsHeaders } from '@/lib/api/security';
-import { uploadImageToR2 } from '@/lib/r2/upload';
+import { uploadImageToR2 } from '@/lib/r2/health-upload';
 import { logOCRHealth } from '@/lib/supabase/ocr-logs';
 
 /**

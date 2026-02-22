@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { generateText } from 'ai';
 import { getCorsHeaders } from '@/lib/api/security';
+import { uploadReceiptToR2 } from '@/lib/r2/split-upload';
 
 /**
- * 發票/收據 OCR API
- * 用於旅遊記帳 App 的發票識別
+ * 收據處理 API
+ * - action: "scan"   → OCR 辨識 + 上傳圖片到 R2（預設）
+ * - action: "upload" → 僅上傳圖片到 R2（手動加照片用）
  */
 
 export interface ReceiptOCRResult {
@@ -17,6 +19,7 @@ export interface ReceiptOCRResult {
   items: ReceiptItem[];
   rawText: string;
   confidence: number;
+  image_urls: string[];
   error?: string;
 }
 
@@ -27,7 +30,6 @@ export interface ReceiptItem {
   totalPrice: number | null;
 }
 
-// 處理 OPTIONS 請求（CORS preflight）
 export async function OPTIONS(req: Request) {
   const origin = req.headers.get('origin');
   return new NextResponse(null, {
@@ -42,33 +44,52 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { image, language = 'zh-Hant' } = body;
+    const { action = 'scan', image } = body;
 
-    if (!image) {
+    // Support both `image` (single) and `images` (array)
+    const images: string[] = body.images ?? (image ? [image] : []);
+
+    if (images.length === 0) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Missing image data',
-          message: 'Please provide an image in base64 format',
-        },
-        {
-          status: 400,
-          headers: corsHeaders,
-        }
+        { success: false, error: 'Missing image data' },
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    // 使用 Gemini 進行發票 OCR 識別
-    const { text } = await generateText({
-      model: 'google/gemini-2.5-flash-image',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `請仔細分析這張發票或收據照片，提取以下資訊。
-發票語言提示：${language}
+    const { country_code, currency_code } = body;
+
+    // ── Upload only（手動加照片，不需 OCR）──
+    if (action === 'upload') {
+      const urls = await Promise.all(
+        images.map((img) => uploadReceiptToR2(img, country_code, currency_code))
+      );
+      return NextResponse.json({ success: true, image_urls: urls }, { headers: corsHeaders });
+    }
+
+    // ── Scan: OCR + 上傳 R2 一次完成 ──
+    const { language = 'zh-Hant' } = body;
+
+    // Build image content parts for Gemini
+    const imageContentParts = images.map((img) => ({
+      type: 'image' as const,
+      image: img,
+    }));
+
+    const multiImageHint = images.length > 1
+      ? `\n\n注意：以下有 ${images.length} 張同一筆消費的收據/發票照片，請合併分析所有照片的資訊，整合為一筆結果。`
+      : '';
+
+    const [ocrResponse, ...imageUrls] = await Promise.all([
+      generateText({
+        model: 'google/gemini-2.5-flash-image',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `請仔細分析這${images.length > 1 ? '些' : '張'}發票或收據照片，提取以下資訊。
+發票語言提示：${language}${multiImageHint}
 
 **需要提取的資訊：**
 1. **總金額** (amount) - 最終需付金額，找 "總計"、"合計"、"Total"、"應付金額" 等
@@ -118,26 +139,32 @@ export async function POST(req: Request) {
 - 只返回 JSON，不要任何其他文字
 
 請開始分析圖片：`
-            },
-            {
-              type: 'image',
-              image: image
-            }
-          ]
-        }
-      ],
-      temperature: 0.1,
-    });
+              },
+              ...imageContentParts,
+            ]
+          }
+        ],
+        temperature: 0.1,
+      }),
+      // 上傳所有圖片到 R2（失敗不影響 OCR 結果）
+      ...images.map((img) => {
+        return uploadReceiptToR2(img, country_code, currency_code).catch((err) => {
+          console.error(`[Split Scan] R2 上傳失敗（不影響 OCR）:`, err);
+          return null;
+        });
+      }),
+    ]);
 
-    // 解析 AI 返回的 JSON
-    const result = parseReceiptOCRResponse(text);
+    const result = parseReceiptOCRResponse(ocrResponse.text);
+    const validUrls = imageUrls.filter((u): u is string => u !== null);
 
-    return NextResponse.json(result, {
-      headers: corsHeaders,
-    });
+    return NextResponse.json(
+      { ...result, image_urls: validUrls },
+      { headers: corsHeaders }
+    );
 
   } catch (error) {
-    console.error('[Receipt OCR] 處理錯誤:', error);
+    console.error('[Split Scan] 處理錯誤:', error);
 
     return NextResponse.json(
       {
@@ -150,19 +177,16 @@ export async function POST(req: Request) {
         items: [],
         rawText: '',
         confidence: 0,
+        image_urls: [],
         error: 'Internal server error',
       } as ReceiptOCRResult,
-      {
-        status: 500,
-        headers: corsHeaders,
-      }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
 
-function parseReceiptOCRResponse(text: string): ReceiptOCRResult {
+function parseReceiptOCRResponse(text: string): Omit<ReceiptOCRResult, 'image_urls'> {
   try {
-    // 提取 JSON 部分（處理可能的 markdown 包裝）
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
 
     if (jsonMatch) {
