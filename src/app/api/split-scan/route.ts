@@ -16,6 +16,8 @@ export interface ReceiptOCRResult {
   date: string | null;
   time: string | null;
   merchantName: string | null;
+  subtitle: string | null;
+  address: string | null;
   items: ReceiptItem[];
   rawText: string;
   confidence: number;
@@ -103,8 +105,10 @@ export async function POST(req: Request) {
    - 其他請返回對應的 ISO 4217 代碼
 3. **日期** (date) - 格式 YYYY-MM-DD
 4. **時間** (time) - 格式 HH:mm（24小時制）
-5. **商家名稱** (merchantName) - 店名或公司名
-6. **消費明細** (items) - 每個品項包含：
+5. **商家名稱** (merchantName) - 品牌名或公司名（如 UNIQLO、全家、星巴克）
+6. **分店名** (subtitle) - 分店名或門市名（如 次郎店、信義門市、台北101店）
+7. **地址** (address) - 商家地址
+8. **消費明細** (items) - 每個品項包含：
    - name: 品名
    - quantity: 數量
    - unitPrice: 單價
@@ -123,7 +127,9 @@ export async function POST(req: Request) {
   "currency": "TWD",
   "date": "2024-01-15",
   "time": "14:30",
-  "merchantName": "全家便利商店",
+  "merchantName": "全家",
+  "subtitle": "信義門市",
+  "address": "台北市信義區信義路五段7號",
   "items": [
     {"name": "咖啡", "quantity": 2, "unitPrice": 45, "totalPrice": 90},
     {"name": "三明治", "quantity": 1, "unitPrice": 65, "totalPrice": 65}
@@ -158,6 +164,12 @@ export async function POST(req: Request) {
     const result = parseReceiptOCRResponse(ocrResponse.text);
     const validUrls = imageUrls.filter((u): u is string => u !== null);
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Split Scan] OCR 結果:', ocrResponse.text);
+    } else {
+      console.log('[Split Scan] OCR 完成');
+    }
+
     return NextResponse.json(
       { ...result, image_urls: validUrls },
       { headers: corsHeaders }
@@ -174,6 +186,8 @@ export async function POST(req: Request) {
         date: null,
         time: null,
         merchantName: null,
+        subtitle: null,
+        address: null,
         items: [],
         rawText: '',
         confidence: 0,
@@ -200,6 +214,8 @@ function parseReceiptOCRResponse(text: string): Omit<ReceiptOCRResult, 'image_ur
         date: parsed.date ?? null,
         time: parsed.time ?? null,
         merchantName: parsed.merchantName ?? null,
+        subtitle: parsed.subtitle ?? null,
+        address: parsed.address ?? null,
         items: parsed.items ?? [],
         rawText: text,
         confidence: parsed.confidence ?? 0.8,
@@ -216,6 +232,8 @@ function parseReceiptOCRResponse(text: string): Omit<ReceiptOCRResult, 'image_ur
     date: null,
     time: null,
     merchantName: null,
+    subtitle: null,
+    address: null,
     items: [],
     rawText: text,
     confidence: 0,
