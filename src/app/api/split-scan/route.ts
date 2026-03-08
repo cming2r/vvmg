@@ -52,8 +52,9 @@ export async function POST(req: Request) {
 
     // Support both `image` (single) and `images` (array)
     const images: string[] = body.images ?? (image ? [image] : []);
+    const imageUrlsInput: string[] = body.image_urls ?? [];
 
-    if (images.length === 0) {
+    if (images.length === 0 && imageUrlsInput.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Missing image data' },
         { status: 400, headers: corsHeaders }
@@ -72,13 +73,11 @@ export async function POST(req: Request) {
 
     // ── Scan: OCR + 上傳 R2 ──
     const { language = 'zh-Hant' } = body;
-    const inputImageUrls: string[] = body.image_urls ?? [];
-
     // If image_urls provided, use URL mode (no upload needed)
     // Otherwise, upload base64 images to R2 first, then use URLs for OCR
     let resolvedUrls: string[];
-    if (inputImageUrls.length > 0) {
-      resolvedUrls = inputImageUrls;
+    if (imageUrlsInput.length > 0) {
+      resolvedUrls = imageUrlsInput;
     } else {
       resolvedUrls = (await Promise.all(
         images.map((img) =>
