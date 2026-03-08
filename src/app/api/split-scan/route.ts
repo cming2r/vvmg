@@ -3,6 +3,8 @@ import { generateText } from 'ai';
 import { getCorsHeaders } from '@/lib/api/security';
 import { uploadReceiptToR2 } from '@/lib/r2/split-upload';
 
+export const maxDuration = 60;
+
 /**
  * 收據處理 API
  * - action: "scan"   → OCR 辨識 + 上傳圖片到 R2（預設）
@@ -68,21 +70,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, image_urls: urls }, { headers: corsHeaders });
     }
 
-    // ── Scan: OCR + 上傳 R2 一次完成 ──
+    // ── Scan: OCR + 上傳 R2 ──
     const { language = 'zh-Hant' } = body;
+    const inputImageUrls: string[] = body.image_urls ?? [];
 
-    // Build image content parts for Gemini
-    const imageContentParts = images.map((img) => ({
+    // If image_urls provided, use URL mode (no upload needed)
+    // Otherwise, upload base64 images to R2 first, then use URLs for OCR
+    let resolvedUrls: string[];
+    if (inputImageUrls.length > 0) {
+      resolvedUrls = inputImageUrls;
+    } else {
+      resolvedUrls = (await Promise.all(
+        images.map((img) =>
+          uploadReceiptToR2(img, country_code, currency_code).catch((err) => {
+            console.error(`[Split Scan] R2 上傳失敗:`, err);
+            return null;
+          })
+        )
+      )).filter((u): u is string => u !== null);
+    }
+
+    // Build image content parts from URLs
+    const imageContentParts = resolvedUrls.map((url) => ({
       type: 'image' as const,
-      image: img,
+      image: new URL(url),
     }));
 
-    const multiImageHint = images.length > 1
-      ? `\n\n注意：以下有 ${images.length} 張同一筆消費的收據/發票照片，請合併分析所有照片的資訊，整合為一筆結果。`
+    const totalImages = resolvedUrls.length;
+    const multiImageHint = totalImages > 1
+      ? `\n\n注意：以下有 ${totalImages} 張同一筆消費的收據/發票照片，請合併分析所有照片的資訊，整合為一筆結果。`
       : '';
 
-    const [ocrResponse, ...imageUrls] = await Promise.all([
-      generateText({
+    const ocrResponse = await generateText({
         model: 'google/gemini-2.5-flash-image',
         messages: [
           {
@@ -90,7 +109,7 @@ export async function POST(req: Request) {
             content: [
               {
                 type: 'text',
-                text: `請仔細分析這${images.length > 1 ? '些' : '張'}發票或收據照片，提取以下資訊。
+                text: `請仔細分析這${totalImages > 1 ? '些' : '張'}發票或收據照片，提取以下資訊。
 發票語言提示：${language}${multiImageHint}
 
 **需要提取的資訊：**
@@ -143,6 +162,8 @@ export async function POST(req: Request) {
 - confidence 為 0-1 之間的信心分數
 - items 如果無法識別則返回空陣列 []
 - 只返回 JSON，不要任何其他文字
+- **務必包含所有折扣、優惠、回饋、折讓行**（如「會員折扣 -50」、「滿額折抵」、「紅利折抵」等），這些項目的 totalPrice 為負數
+- **items 的 totalPrice 加總必須等於 amount**，如果不一致請重新檢查是否遺漏了折扣或優惠項目
 
 請開始分析圖片：`
               },
@@ -151,18 +172,9 @@ export async function POST(req: Request) {
           }
         ],
         temperature: 0.1,
-      }),
-      // 上傳所有圖片到 R2（失敗不影響 OCR 結果）
-      ...images.map((img) => {
-        return uploadReceiptToR2(img, country_code, currency_code).catch((err) => {
-          console.error(`[Split Scan] R2 上傳失敗（不影響 OCR）:`, err);
-          return null;
-        });
-      }),
-    ]);
+      });
 
     const result = parseReceiptOCRResponse(ocrResponse.text);
-    const validUrls = imageUrls.filter((u): u is string => u !== null);
 
     if (process.env.NODE_ENV === 'development') {
       console.log('[Split Scan] OCR 結果:', ocrResponse.text);
@@ -171,7 +183,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { ...result, image_urls: validUrls },
+      { ...result, image_urls: resolvedUrls },
       { headers: corsHeaders }
     );
 
