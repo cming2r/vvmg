@@ -186,7 +186,7 @@ export async function POST(req: Request) {
     const ip_address = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
     logSplitScan({
       image_urls: resolvedUrls,
-      ocr_result: result,
+      ocr_result: { ...result, rawText: undefined },
       device_id: body.device_id || null,
       country_code: country_code || null,
       currency_code: currency_code || null,
