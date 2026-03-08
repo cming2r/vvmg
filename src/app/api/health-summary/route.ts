@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateText } from 'ai';
 import { validateApiKey, isRateLimited, getRateLimitInfo, getCorsHeaders } from '@/lib/api/security';
-import { logHealthSummary } from '@/lib/supabase/ocr-logs';
+import { logHealthSummary } from '@/lib/supabase/health-scan-logs';
 
 /**
  * 外部 API - 健康摘要 v1

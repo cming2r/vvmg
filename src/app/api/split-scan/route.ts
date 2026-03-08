@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { generateText } from 'ai';
 import { getCorsHeaders } from '@/lib/api/security';
 import { uploadReceiptToR2 } from '@/lib/r2/split-upload';
+import { logSplitScan } from '@/lib/supabase/split-scan-logs';
 
 export const maxDuration = 60;
 
@@ -180,6 +181,18 @@ export async function POST(req: Request) {
     } else {
       console.log('[Split Scan] OCR 完成');
     }
+
+    // 非同步記錄掃描結果（不影響回傳速度）
+    const ip_address = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
+    logSplitScan({
+      image_urls: resolvedUrls,
+      ocr_result: result,
+      device_id: body.device_id || null,
+      country_code: country_code || null,
+      currency_code: currency_code || null,
+      add_from: body.add_from || null,
+      ip_address,
+    }).catch(() => {});
 
     return NextResponse.json(
       { ...result, image_urls: resolvedUrls },
