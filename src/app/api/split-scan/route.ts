@@ -102,7 +102,7 @@ export async function POST(req: Request) {
       : '';
 
     const ocrResponse = await generateText({
-        model: 'google/gemini-2.5-flash-image',
+        model: 'google/gemini-3.1-flash-image-preview',
         messages: [
           {
             role: 'user',
