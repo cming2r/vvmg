@@ -49,13 +49,13 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { action = 'scan', image } = body;
+    const { action = 'scan' } = body;
 
-    // Support both `image` (single) and `images` (array)
-    const images: string[] = body.images ?? (image ? [image] : []);
-    const imageUrlsInput: string[] = body.image_urls ?? [];
+    // 單張圖片：支援 images[0] 或 image
+    const image: string | undefined = body.images?.[0] ?? body.image;
+    const imageUrlInput: string | undefined = body.image_urls?.[0];
 
-    if (images.length === 0 && imageUrlsInput.length === 0) {
+    if (!image && !imageUrlInput) {
       return NextResponse.json(
         { success: false, error: 'Missing image data' },
         { status: 400, headers: corsHeaders }
@@ -66,40 +66,25 @@ export async function POST(req: Request) {
 
     // ── Upload only（手動加照片，不需 OCR）──
     if (action === 'upload') {
-      const urls = await Promise.all(
-        images.map((img) => uploadReceiptToR2(img, country_code, currency_code))
-      );
-      return NextResponse.json({ success: true, image_urls: urls }, { headers: corsHeaders });
+      if (!image) {
+        return NextResponse.json(
+          { success: false, error: 'Missing image data' },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+      const url = await uploadReceiptToR2(image, country_code, currency_code);
+      return NextResponse.json({ success: true, image_urls: [url] }, { headers: corsHeaders });
     }
 
     // ── Scan: OCR + 上傳 R2 ──
     const { language = 'zh-Hant' } = body;
-    // If image_urls provided, use URL mode (no upload needed)
-    // Otherwise, upload base64 images to R2 first, then use URLs for OCR
-    let resolvedUrls: string[];
-    if (imageUrlsInput.length > 0) {
-      resolvedUrls = imageUrlsInput;
+
+    let resolvedUrl: string;
+    if (imageUrlInput) {
+      resolvedUrl = imageUrlInput;
     } else {
-      resolvedUrls = (await Promise.all(
-        images.map((img) =>
-          uploadReceiptToR2(img, country_code, currency_code).catch((err) => {
-            console.error(`[Split Scan] R2 上傳失敗:`, err);
-            return null;
-          })
-        )
-      )).filter((u): u is string => u !== null);
+      resolvedUrl = await uploadReceiptToR2(image!, country_code, currency_code);
     }
-
-    // Build image content parts from URLs
-    const imageContentParts = resolvedUrls.map((url) => ({
-      type: 'image' as const,
-      image: new URL(url),
-    }));
-
-    const totalImages = resolvedUrls.length;
-    const multiImageHint = totalImages > 1
-      ? `\n\n注意：以下有 ${totalImages} 張同一筆消費的收據/發票照片，請合併分析所有照片的資訊，整合為一筆結果。`
-      : '';
 
     const ocrResponse = await generateText({
         model: 'google/gemini-3.1-flash-image-preview',
@@ -109,8 +94,8 @@ export async function POST(req: Request) {
             content: [
               {
                 type: 'text',
-                text: `請仔細分析這${totalImages > 1 ? '些' : '張'}發票或收據照片，提取以下資訊。
-發票語言提示：${language}${multiImageHint}
+                text: `請仔細分析這張發票或收據照片，提取以下資訊。
+發票語言提示：${language}
 
 **需要提取的資訊：**
 1. **總金額** (amount) - 最終需付金額，找 "總計"、"合計"、"Total"、"應付金額" 等
@@ -165,9 +150,12 @@ export async function POST(req: Request) {
 - **務必包含所有折扣、優惠、回饋、折讓行**（如「會員折扣 -50」、「滿額折抵」、「紅利折抵」等），這些項目的 totalPrice 為負數
 - **items 的 totalPrice 加總必須等於 amount**，如果不一致請重新檢查是否遺漏了折扣或優惠項目
 
-請開始分析圖片：`
+請開始分析這張圖片：`
               },
-              ...imageContentParts,
+              {
+                type: 'image' as const,
+                image: new URL(resolvedUrl),
+              },
             ]
           }
         ],
@@ -185,7 +173,7 @@ export async function POST(req: Request) {
     // 非同步記錄掃描結果（不影響回傳速度）
     const ip_address = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
     logSplitScan({
-      image_urls: resolvedUrls,
+      image_urls: [resolvedUrl],
       ocr_result: { ...result, rawText: undefined },
       device_id: body.device_id || null,
       country_code: country_code || null,
@@ -195,7 +183,7 @@ export async function POST(req: Request) {
     }).catch(() => {});
 
     return NextResponse.json(
-      { ...result, image_urls: resolvedUrls },
+      { ...result, image_urls: [resolvedUrl] },
       { headers: corsHeaders }
     );
 
