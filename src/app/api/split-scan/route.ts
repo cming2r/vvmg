@@ -51,6 +51,22 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action = 'scan' } = body;
 
+    // ── Delete images（刪除帳號時清理 R2 圖片）──
+    if (action === 'delete-images') {
+      const fileNames: string[] = body.file_names ?? [];
+      if (fileNames.length > 0) {
+        const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+        const { getR2Client, BUCKET_NAME } = await import('@/lib/r2/split-upload');
+        const r2Client = getR2Client();
+        await Promise.all(
+          fileNames.map((name: string) =>
+            r2Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: name })).catch(() => {})
+          )
+        );
+      }
+      return NextResponse.json({ success: true }, { headers: corsHeaders });
+    }
+
     // 單張圖片：支援 images[0] 或 image
     const image: string | undefined = body.images?.[0] ?? body.image;
     const imageUrlInput: string | undefined = body.image_urls?.[0];

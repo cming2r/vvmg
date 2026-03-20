@@ -1,10 +1,10 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { randomBytes } from 'crypto';
 
-const BUCKET_NAME = 'whosplit';
+export const BUCKET_NAME = 'whosplit';
 const PUBLIC_R2_URL = 'https://pub-9c07bd3fb8fc467280e276ebfdbfd8c8.r2.dev';
 
-function getR2Client() {
+export function getR2Client() {
   const endpoint = process.env.R2_ENDPOINT;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
