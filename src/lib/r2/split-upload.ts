@@ -51,7 +51,7 @@ export async function uploadReceiptToR2(
     const buffer = Buffer.from(base64Data, 'base64');
 
     const now = new Date();
-    const timestamp = now.toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
+    const timestamp = now.toISOString().slice(2, 16).replace(/[-:]/g, '').replace('T', '_');
     const country = (countryCode || 'XX').toUpperCase();
     const currency = (currencyCode || 'XXX').toUpperCase();
     const randomCode = generateRandomCode();
