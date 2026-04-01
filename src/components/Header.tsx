@@ -10,7 +10,7 @@ export default function Header() {
   const supabase = createClientForBrowser();
 
   useEffect(() => {
-    // 獲取當前用戶
+    // Get current user
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
@@ -19,7 +19,7 @@ export default function Header() {
 
     getUser();
 
-    // 監聽認證狀態變化
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setUser(session?.user ?? null);
@@ -34,14 +34,14 @@ export default function Header() {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('登出錯誤:', error);
-        alert('登出失敗，請稍後再試');
+        console.error('Sign out error:', error);
+        alert('Sign out failed. Please try again later.');
       } else {
         window.location.href = '/';
       }
     } catch (error) {
-      console.error('登出錯誤:', error);
-      alert('登出失敗，請稍後再試');
+      console.error('Sign out error:', error);
+      alert('Sign out failed. Please try again later.');
     }
   };
 
@@ -50,33 +50,35 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-gray-100 p-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-xl font-semibold">VVMG</h1>
-        <div className="flex items-center space-x-4">
+    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
+      <div className="max-w-6xl mx-auto px-4 h-14 flex justify-between items-center">
+        <a href="/" className="text-lg font-bold tracking-tight text-gray-900 hover:text-gray-700 transition-colors">
+          VVMG
+        </a>
+        <div className="flex items-center gap-3">
           {loading ? (
-            <div className="animate-pulse bg-gray-300 h-8 w-16 rounded"></div>
+            <div className="animate-pulse bg-gray-200 h-8 w-16 rounded-lg"></div>
           ) : user ? (
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => window.location.href = '/admin'}
-                className="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-md text-sm transition-colors"
+            <>
+              <a
+                href="/admin"
+                className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5"
               >
-                管理頁面
-              </button>
+                Admin
+              </a>
               <button
                 onClick={handleSignOut}
-                className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md text-sm transition-colors"
+                className="text-sm font-medium text-gray-500 hover:text-red-600 transition-colors px-3 py-1.5"
               >
-                登出
+                Sign Out
               </button>
-            </div>
+            </>
           ) : (
             <button
               onClick={handleLogin}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md text-sm transition-colors"
+              className="text-sm font-medium bg-gray-900 hover:bg-gray-800 text-white px-4 py-1.5 rounded-lg transition-colors"
             >
-              登入
+              Sign In
             </button>
           )}
         </div>

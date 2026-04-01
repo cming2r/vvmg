@@ -6,6 +6,8 @@ import { User } from '@supabase/supabase-js';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
+const ALLOWED_EMAILS = ['cming2ring@gmail.com', 'ronny314159@gmail.com'];
+
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,15 +42,14 @@ export default function Admin() {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('登出錯誤:', error);
-        alert('登出失敗，請稍後再試');
+        console.error('Sign out error:', error);
+        alert('Sign out failed. Please try again later.');
       } else {
-        console.log('登出成功');
         window.location.href = '/login';
       }
     } catch (error) {
-      console.error('登出錯誤:', error);
-      alert('登出失敗，請稍後再試');
+      console.error('Sign out error:', error);
+      alert('Sign out failed. Please try again later.');
     }
   };
 
@@ -57,15 +58,29 @@ export default function Admin() {
       <div className="min-h-screen flex flex-col">
         <Header />
         <main className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!user || !ALLOWED_EMAILS.includes(user.email || '')) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">載入中...</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Oops, this page is private</h1>
+            <p className="text-gray-600">It looks like you don&apos;t have access here. If you think this is a mistake, reach out to the admin.</p>
           </div>
         </main>
         <Footer />
       </div>
     );
   }
+
+  const email = user.email;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -74,74 +89,72 @@ export default function Admin() {
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-8">
             <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">管理面板</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
               <button
                 onClick={handleSignOut}
                 className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md transition-colors"
               >
-                登出
+                Sign Out
               </button>
             </div>
 
             <div className="border-b pb-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-700 mb-4">用戶資訊</h2>
+              <h2 className="text-lg font-semibold text-gray-700 mb-4">User Info</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-600">電子郵件</label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {user?.email || '未設置電子郵件'}
-                  </p>
-                  {!user?.email && (
-                    <p className="mt-1 text-xs text-red-500">
-                      調試: user object = {JSON.stringify(user, null, 2)}
-                    </p>
-                  )}
+                  <label className="block text-sm font-medium text-gray-600">Email</label>
+                  <p className="mt-1 text-sm text-gray-900">{user.email}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-600">用戶ID</label>
-                  <p className="mt-1 text-sm text-gray-900 font-mono">{user?.id}</p>
+                  <label className="block text-sm font-medium text-gray-600">User ID</label>
+                  <p className="mt-1 text-sm text-gray-900 font-mono">{user.id}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-600">註冊時間</label>
+                  <label className="block text-sm font-medium text-gray-600">Created At</label>
                   <p className="mt-1 text-sm text-gray-900">
-                    {user?.created_at ? new Date(user.created_at).toLocaleString('zh-TW') : 'N/A'}
+                    {user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-600">最後登入</label>
+                  <label className="block text-sm font-medium text-gray-600">Last Sign In</label>
                   <p className="mt-1 text-sm text-gray-900">
-                    {user?.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString('zh-TW') : 'N/A'}
+                    {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'N/A'}
                   </p>
                 </div>
               </div>
             </div>
 
             <div className="space-y-6">
-              <h2 className="text-lg font-semibold text-gray-700">管理功能</h2>
+              <h2 className="text-lg font-semibold text-gray-700">Features</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-gray-900 mb-2">用戶管理</h3>
-                  <p className="text-sm text-gray-600 mb-3">管理系統用戶</p>
-                  <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md text-sm transition-colors">
-                    進入管理
-                  </button>
-                </div>
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-gray-900 mb-2">系統設定</h3>
-                  <p className="text-sm text-gray-600 mb-3">配置系統參數</p>
-                  <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md text-sm transition-colors">
-                    進入設定
-                  </button>
-                </div>
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-gray-900 mb-2">日誌查看</h3>
-                  <p className="text-sm text-gray-600 mb-3">查看系統日誌</p>
-                  <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md text-sm transition-colors">
-                    查看日誌
-                  </button>
-                </div>
+                {email === 'cming2ring@gmail.com' && (
+                  <>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="font-medium text-gray-900 mb-2">PicHealth</h3>
+                      <p className="text-sm text-gray-600 mb-3">View health scan records</p>
+                      <a href="/admin/pichealth" className="block w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md text-sm transition-colors text-center">
+                        Open
+                      </a>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="font-medium text-gray-900 mb-2">WaySplit</h3>
+                      <p className="text-sm text-gray-600 mb-3">View split scan records</p>
+                      <a href="/admin/split" className="block w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md text-sm transition-colors text-center">
+                        Open
+                      </a>
+                    </div>
+                  </>
+                )}
+
+                {email === 'ronny314159@gmail.com' && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-medium text-gray-900 mb-2">Videos</h3>
+                    <p className="text-sm text-gray-600 mb-3">Browse video library</p>
+                    <a href="/admin/nsfw" className="block w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md text-sm transition-colors text-center">
+                      Open
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           </div>

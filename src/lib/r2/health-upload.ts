@@ -45,7 +45,7 @@ function getR2Client() {
  * 生成 6 位數小寫亂碼
  */
 function generateRandomCode(): string {
-  return randomBytes(3).toString('hex'); // 3 bytes = 6 hex characters
+  return randomBytes(2).toString('hex'); // 2 bytes = 4 hex characters
 }
 
 /**
@@ -70,10 +70,12 @@ export async function uploadImageToR2(
     // 轉換為 Buffer
     const buffer = Buffer.from(base64Data, 'base64');
 
-    // 生成檔名：[國碼]_[6位數小寫亂碼].[副檔名]
+    // 生成檔名：[UTC時間]_[國碼]_[亂碼].[副檔名]
+    const now = new Date();
+    const timestamp = now.toISOString().slice(2, 16).replace(/[-:]/g, '').replace('T', '_');
     const country = (countryCode || 'XX').toUpperCase();
     const randomCode = generateRandomCode();
-    const fileName = `${country}_${randomCode}.${imageType}`;
+    const fileName = `${timestamp}_${country}_${randomCode}.${imageType}`;
 
     // 上傳到 R2
     const r2Client = getR2Client();
