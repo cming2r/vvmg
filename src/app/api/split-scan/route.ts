@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { generateText } from 'ai';
 import { getCorsHeaders } from '@/lib/api/security';
 import { uploadReceiptToR2 } from '@/lib/r2/split-upload';
@@ -186,17 +186,23 @@ export async function POST(req: Request) {
       console.log('[Split Scan] OCR 完成');
     }
 
-    // 非同步記錄掃描結果（不影響回傳速度）
+    // 先回傳結果，背景記錄到 Supabase
     const ip_address = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
-    logSplitScan({
-      image_urls: [resolvedUrl],
-      ocr_result: { ...result, rawText: undefined },
-      device_id: body.device_id || null,
-      country_code: country_code || null,
-      currency_code: currency_code || null,
-      add_from: body.add_from || null,
-      ip_address,
-    }).catch(() => {});
+    after(async () => {
+      try {
+        await logSplitScan({
+          image_urls: [resolvedUrl],
+          ocr_result: { ...result, rawText: undefined },
+          device_id: body.device_id || null,
+          country_code: country_code || null,
+          currency_code: currency_code || null,
+          add_from: body.add_from || null,
+          ip_address,
+        });
+      } catch (logError) {
+        console.error('[Split Scan] 記錄保存失敗:', logError);
+      }
+    });
 
     return NextResponse.json(
       { ...result, image_urls: [resolvedUrl] },
