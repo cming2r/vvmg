@@ -88,8 +88,9 @@ export async function POST(req: Request) {
           { status: 400, headers: corsHeaders }
         );
       }
-      const url = await uploadReceiptToR2(image, country_code, currency_code);
-      return NextResponse.json({ success: true, image_urls: [url] }, { headers: corsHeaders });
+      const type: 'receipt' | 'photo' = body.type === 'photo' ? 'photo' : 'receipt';
+      const url = await uploadReceiptToR2(image, country_code, currency_code, type);
+      return NextResponse.json({ success: true, url, image_urls: [url] }, { headers: corsHeaders });
     }
 
     // ── Scan: OCR + 上傳 R2 ──

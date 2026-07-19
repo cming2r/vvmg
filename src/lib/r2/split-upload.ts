@@ -36,15 +36,18 @@ function generateRandomCode(): string {
 /**
  * 上傳收據圖片到 R2 whosplit bucket
  * 檔名格式：{UTC時間}_{countryCode}_{currencyCode}_{randomId}.jpg
+ * 旅程照（type: 'photo'）多加 photo/ 前綴，與收據照區分
  * @param imageBase64 - Base64 編碼的圖片（可含 data URI 前綴）
  * @param countryCode - 裝置國碼（如 TW）
  * @param currencyCode - 消費幣種（如 JPY）
+ * @param type - 'receipt'（收據照，預設）或 'photo'（旅程照）
  * @returns 完整的公開 URL
  */
 export async function uploadReceiptToR2(
   imageBase64: string,
   countryCode?: string | null,
-  currencyCode?: string | null
+  currencyCode?: string | null,
+  type: 'receipt' | 'photo' = 'receipt'
 ): Promise<string> {
   try {
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
@@ -55,7 +58,8 @@ export async function uploadReceiptToR2(
     const country = (countryCode || 'XX').toUpperCase();
     const currency = (currencyCode || 'XXX').toUpperCase();
     const randomCode = generateRandomCode();
-    const fileName = `${timestamp}_${country}_${currency}_${randomCode}.jpg`;
+    const prefix = type === 'photo' ? 'photo/' : '';
+    const fileName = `${prefix}${timestamp}_${country}_${currency}_${randomCode}.jpg`;
 
     const r2Client = getR2Client();
 
